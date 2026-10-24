@@ -57,22 +57,33 @@ class AppConstants {
       'kfc',
       'burger king',
       'subway',
+      'eatclub',
+      'box8',
+      'behrouz',
+      'faasos',
+      'chaayos',
       'food',
       'restaurant',
       'cafe',
       'starbucks',
+      'bakery',
+      'dining',
     ],
     categoryGroceries: [
       'bigbasket',
       'grofers',
       'blinkit',
       'zepto',
+      'instamart',
+      'bbdaily',
       'jiomart',
       'dmart',
       'reliance fresh',
       'more',
       'grocery',
       'supermarket',
+      'vegetable',
+      'fruits',
     ],
     categoryTransport: [
       'uber',
@@ -83,8 +94,14 @@ class AppConstants {
       'makemytrip',
       'goibibo',
       'redbus',
+      'fastag',
+      'toll',
       'petrol',
       'fuel',
+      'hpcl',
+      'bpcl',
+      'iocl',
+      'shell',
       'parking',
     ],
     categoryShopping: [
@@ -106,17 +123,29 @@ class AppConstants {
       'wifi',
       'internet',
       'mobile recharge',
+      'recharge',
       'dth',
+      'tata play',
+      'dish tv',
       'airtel',
       'jio',
+      'vi',
       'vodafone',
       'bsnl',
+      'bescom',
+      'tneb',
+      'mseb',
+      'tatapower',
     ],
     categoryEMI: [
       'emi',
       'loan',
       'credit card bill',
       'installment',
+      'bajaj finance',
+      'cred',
+      'home loan',
+      'personal loan',
     ],
     categoryRent: [
       'rent',
@@ -268,5 +297,9 @@ class AppConstants {
   static const String prefKeyMonthlyBudget = 'monthly_budget';
   static const String prefKeyFirstLaunch = 'first_launch';
   // Gemini API Key
+  static const String prefKeyGeminiApiKey = 'gemini_api_key';
+
+  // Gemini & Camspot AI Credentials
   static const String geminiApiKey = 'AIzaSyA3faqVHnhl0z5jvDibZbV0AuIWTZH5LzQ';
+  static const String camspotWebApiKey = 'AIzaSyCGyV8kKU_0-wGWRRlxXdoqkU7-2z_U6es';
 }

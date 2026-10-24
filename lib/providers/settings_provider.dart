@@ -1,15 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
+import '../services/gemini_service.dart';
 
 class SettingsProvider with ChangeNotifier {
   bool _notificationsEnabled = true;
   double? _monthlyBudget;
   bool _isFirstLaunch = true;
+  String? _geminiApiKey;
 
   bool get notificationsEnabled => _notificationsEnabled;
   double? get monthlyBudget => _monthlyBudget;
   bool get isFirstLaunch => _isFirstLaunch;
+  String get geminiApiKey => _geminiApiKey ?? AppConstants.geminiApiKey;
+  bool get hasCustomGeminiKey => _geminiApiKey != null && _geminiApiKey!.isNotEmpty;
 
   // Initialize settings from shared preferences
   Future<void> initialize() async {
@@ -23,7 +27,27 @@ class SettingsProvider with ChangeNotifier {
     
     _isFirstLaunch = prefs.getBool(AppConstants.prefKeyFirstLaunch) ?? true;
     
+    _geminiApiKey = prefs.getString(AppConstants.prefKeyGeminiApiKey);
+    if (_geminiApiKey != null && _geminiApiKey!.isNotEmpty) {
+      GeminiService.instance.setApiKey(_geminiApiKey);
+    }
+    
     notifyListeners();
+  }
+
+  // Update Gemini API key
+  Future<void> setGeminiApiKey(String? key) async {
+    final trimmed = key?.trim();
+    _geminiApiKey = (trimmed != null && trimmed.isNotEmpty) ? trimmed : null;
+    GeminiService.instance.setApiKey(_geminiApiKey);
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    if (_geminiApiKey != null) {
+      await prefs.setString(AppConstants.prefKeyGeminiApiKey, _geminiApiKey!);
+    } else {
+      await prefs.remove(AppConstants.prefKeyGeminiApiKey);
+    }
   }
 
   // Set notifications enabled
@@ -65,6 +89,8 @@ class SettingsProvider with ChangeNotifier {
     _notificationsEnabled = true;
     _monthlyBudget = null;
     _isFirstLaunch = true;
+    _geminiApiKey = null;
+    GeminiService.instance.setApiKey(null);
     
     notifyListeners();
   }

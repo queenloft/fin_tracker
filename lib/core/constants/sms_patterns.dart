@@ -2,13 +2,13 @@ class SmsPatterns {
   // Common amount patterns
   static final List<RegExp> amountPatterns = [
     // Rs. 1,234.56 or Rs.1234.56 or Rs 1234.56
-    RegExp(r'Rs\.?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)', caseSensitive: false),
+    RegExp(r'Rs\.?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)', caseSensitive: false),
     // INR 1,234.56 or INR1234.56
-    RegExp(r'INR\.?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)', caseSensitive: false),
+    RegExp(r'INR\.?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)', caseSensitive: false),
     // ₹1,234.56 or ₹ 1234.56
-    RegExp(r'₹\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)', caseSensitive: false),
-    // Just numbers with optional commas: 1,234.56
-    RegExp(r'\b(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\b'),
+    RegExp(r'₹\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)', caseSensitive: false),
+    // 1234.56 rupees / INR / Rs
+    RegExp(r'(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*(?:INR|Rs\.?|rupees)', caseSensitive: false),
   ];
 
   // Debit/Expense Keywords
@@ -148,14 +148,23 @@ class SmsPatterns {
   // Helper method to check if SMS is a transaction SMS
   static bool isTransactionSMS(String sms) {
     final lowerSms = sms.toLowerCase();
-    
+
+    // Fast-fail OTP messages
+    if (lowerSms.contains('otp') ||
+        lowerSms.contains('verification code') ||
+        lowerSms.contains('one time password') ||
+        lowerSms.contains('auth code')) {
+      return false;
+    }
+
     // Check for debit or credit keywords
     final hasDebitKeyword = debitKeywords.any((keyword) => lowerSms.contains(keyword));
     final hasCreditKeyword = creditKeywords.any((keyword) => lowerSms.contains(keyword));
-    
-    // Check for amount pattern
-    final hasAmount = amountPatterns.any((pattern) => pattern.hasMatch(sms));
-    
+
+    // Check for explicit currency pattern or currency symbol
+    final hasAmount = amountPatterns.any((pattern) => pattern.hasMatch(sms)) ||
+        RegExp(r'(?:Rs\.?|INR|₹|\brupees\b)', caseSensitive: false).hasMatch(sms);
+
     return (hasDebitKeyword || hasCreditKeyword) && hasAmount;
   }
 

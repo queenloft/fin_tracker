@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/parser_service.dart';
+import '../../services/sms_service.dart';
 import '../../services/categorization_service.dart';
 import '../../data/models/transaction_model.dart';
 
@@ -15,7 +16,7 @@ class ImportSmsScreen extends StatefulWidget {
 class _ImportSmsScreenState extends State<ImportSmsScreen> {
   final _textController = TextEditingController();
   final ParserService _parserService = ParserService();
-  final CategorizationService _categorizationService = CategorizationService();
+  final SmsService _smsService = SmsService();
   
   List<TransactionModel> _parsedTransactions = [];
   bool _isProcessing = false;
@@ -193,8 +194,23 @@ class _ImportSmsScreenState extends State<ImportSmsScreen> {
       
       for (final sms in smsLines) {
         try {
-          // Parse SMS
-          final parsed = _parserService.parseSMS(
+          TransactionModel? parsed;
+          
+          // 1. Try AI Assistant analysis first
+          try {
+            final aiResult = await _smsService.parseSmsWithAi(sms);
+            if (aiResult != null && aiResult['isTransaction'] != false) {
+              parsed = _parserService.createTransactionFromAiResult(
+                aiResult: aiResult,
+                smsBody: sms,
+                sender: 'Manual',
+                receivedDate: DateTime.now(),
+              );
+            }
+          } catch (_) {}
+
+          // 2. Fallback to enhanced high-accuracy regex parser
+          parsed ??= _parserService.parseSMS(
             smsBody: sms,
             sender: 'Manual',
             receivedDate: DateTime.now(),

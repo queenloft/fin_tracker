@@ -98,10 +98,24 @@ class TransactionProvider with ChangeNotifier {
         }
         
         TransactionModel? transaction;
+
+        // 1. Try AI Assistant parsing first
+        try {
+          final aiResult = await _smsService.parseSmsWithAi(sms['body']);
+          if (aiResult != null && aiResult['isTransaction'] != false) {
+            transaction = _parserService.createTransactionFromAiResult(
+              aiResult: aiResult,
+              smsBody: sms['body'],
+              sender: sms['sender'],
+              receivedDate: sms['date'],
+            );
+          }
+        } catch (e) {
+          print('AI parsing in sync skipped/failed: $e');
+        }
         
-        // Fallback to regex parsing if AI failed
+        // 2. Fallback to enhanced high-accuracy regex parser
         if (transaction == null) {
-          print('Regex parsing: ${sms['body']}');
           transaction = _parserService.parseSMS(
             smsBody: sms['body'],
             sender: sms['sender'],
@@ -154,7 +168,7 @@ class TransactionProvider with ChangeNotifier {
           // Try AI parsing first
           try {
             final aiResult = await _smsService.parseSmsWithAi(sms['body']);
-            if (aiResult != null) {
+            if (aiResult != null && aiResult['isTransaction'] != false) {
               transaction = _parserService.createTransactionFromAiResult(
                 aiResult: aiResult,
                 smsBody: sms['body'],

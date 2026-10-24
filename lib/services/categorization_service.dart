@@ -2,15 +2,17 @@ import '../core/constants/app_constants.dart';
 import '../data/models/transaction_model.dart';
 
 class CategorizationService {
-  // Categorize a transaction based on description and merchant
+  // Categorize a transaction based on description, merchant, and raw SMS
   String categorizeTransaction({
     required String description,
     required String merchant,
     required bool isCredit,
+    String? rawSms,
   }) {
     final lowerDescription = description.toLowerCase();
     final lowerMerchant = merchant.toLowerCase();
-    final combinedText = '$lowerDescription $lowerMerchant';
+    final lowerRaw = (rawSms ?? '').toLowerCase();
+    final combinedText = '$lowerDescription $lowerMerchant $lowerRaw';
 
     // Special handling for credit transactions
     if (isCredit) {
