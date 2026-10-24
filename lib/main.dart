@@ -1,12 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'core/theme/app_theme.dart';
-import 'providers/transaction_provider.dart';
-import 'providers/analytics_provider.dart';
-import 'providers/settings_provider.dart';
+import 'camera_rental/core/theme/app_theme.dart';
+import 'camera_rental/main_camera_app.dart';
 import 'services/notification_service.dart';
-import 'ui/screens/dashboard_screen.dart';
 
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
@@ -35,18 +31,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => SettingsProvider()..initialize()),
-        ChangeNotifierProvider(create: (_) => TransactionProvider()..initialize()),
-        ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
-      ],
-      child: MaterialApp(
-        title: 'FinTracker',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        home: const DashboardScreen(),
-      ),
+    return MaterialApp(
+      title: 'Camspot',
+      debugShowCheckedModeBanner: false,
+      theme: CameraRentalTheme.darkTheme,
+      home: const MainCameraApp(),
     );
   }
 }
