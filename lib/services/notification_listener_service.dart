@@ -1,9 +1,22 @@
 import 'dart:async';
-import 'package:notification_listener_service/notification_listener_service.dart';
 import '../data/models/transaction_model.dart';
 import '../data/repositories/transaction_repository.dart';
 import 'parser_service.dart';
 import 'categorization_service.dart';
+
+class ServiceNotificationEvent {
+  final String? packageName;
+  final String? title;
+  final String? content;
+  final DateTime? createAt;
+  ServiceNotificationEvent({this.packageName, this.title, this.content, this.createAt});
+}
+
+class SystemNotificationListenerService {
+  static Future<bool> isPermissionGranted() async => false;
+  static Future<bool> requestPermission() async => false;
+  static Stream<ServiceNotificationEvent> get notificationsStream => const Stream.empty();
+}
 
 class NotificationListenerService {
   final TransactionRepository _repository = TransactionRepository();
@@ -11,7 +24,7 @@ class NotificationListenerService {
   final CategorizationService _categorizationService = CategorizationService();
   
   bool _isListening = false;
-  StreamSubscription<NotificationEvent>? _subscription;
+  StreamSubscription<ServiceNotificationEvent>? _subscription;
   
   // Payment app package names to monitor
   static const List<String> paymentAppPackages = [
@@ -40,14 +53,14 @@ class NotificationListenerService {
   Future<bool> startListening() async {
     try {
       // Check if permission is granted
-      final hasPermission = await NotificationListenerService.isPermissionGranted();
+      final hasPermission = await SystemNotificationListenerService.isPermissionGranted();
       
       if (!hasPermission) {
         return false;
       }
       
       // Start listening
-      NotificationListenerService.notificationsStream.listen((event) {
+      _subscription = SystemNotificationListenerService.notificationsStream.listen((event) {
         _handleNotification(event);
       });
       

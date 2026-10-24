@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:notification_listener_service/notification_listener_service.dart';
 import '../../services/notification_listener_service.dart' as app_service;
 
 class NotificationListenerScreen extends StatefulWidget {
@@ -21,7 +20,7 @@ class _NotificationListenerScreenState extends State<NotificationListenerScreen>
   }
 
   Future<void> _checkPermission() async {
-    final hasPermission = await NotificationListenerService.isPermissionGranted();
+    final hasPermission = await app_service.SystemNotificationListenerService.isPermissionGranted();
     setState(() {
       _hasPermission = hasPermission;
       _isListening = _service.isListening;
@@ -29,7 +28,7 @@ class _NotificationListenerScreenState extends State<NotificationListenerScreen>
   }
 
   Future<void> _requestPermission() async {
-    await NotificationListenerService.requestPermission();
+    await app_service.SystemNotificationListenerService.requestPermission();
     await _checkPermission();
   }
 
