@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -8,7 +8,7 @@ import '../../core/utils/currency_formatter.dart';
 import '../../core/theme/app_theme.dart';
 import '../widgets/transaction_card.dart';
 
-enum MainFilterTab { all, expenses, income, waste, otps }
+enum MainFilterTab { all, expenses, income, waste, senders, otps }
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -30,17 +30,21 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Transactions & OTPs',
+        title: Text(
+          'Transactions & Intelligence',
           style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 19,
-            letterSpacing: -0.4,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            letterSpacing: -0.5,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
           ),
         ),
         actions: [
@@ -57,7 +61,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Build filter counts
           final totalTxns = provider.allTransactions.length;
           final totalOtps = provider.allOtps.length;
 
@@ -69,18 +72,30 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 child: Container(
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                    ),
                   ),
                   child: TextField(
                     controller: _searchController,
+                    style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
                     decoration: InputDecoration(
                       hintText: _currentTab == MainFilterTab.otps
                           ? 'Search OTPs by service or code...'
-                          : 'Search by merchant, app, amount, bank...',
-                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                      prefixIcon: Icon(Icons.search_rounded, size: 20, color: Colors.grey[400]),
+                          : (_currentTab == MainFilterTab.senders
+                              ? 'Search payees or senders...'
+                              : 'Search by merchant, amount, bank...'),
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        size: 20,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      ),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 18),
@@ -104,9 +119,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 ),
               ),
 
-              // iOS 18 Segmented Filter Chips
+              // Segmented Tab Bar
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Row(
                   children: [
@@ -115,6 +131,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       label: 'All ($totalTxns)',
                       icon: Icons.list_rounded,
                       provider: provider,
+                      isDark: isDark,
                     ),
                     const SizedBox(width: 8),
                     _buildSegmentTab(
@@ -123,6 +140,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       icon: Icons.arrow_upward_rounded,
                       color: AppTheme.expenseColor,
                       provider: provider,
+                      isDark: isDark,
                     ),
                     const SizedBox(width: 8),
                     _buildSegmentTab(
@@ -131,14 +149,25 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       icon: Icons.arrow_downward_rounded,
                       color: AppTheme.incomeColor,
                       provider: provider,
+                      isDark: isDark,
                     ),
                     const SizedBox(width: 8),
                     _buildSegmentTab(
                       tab: MainFilterTab.waste,
-                      label: 'Waste of Money',
-                      icon: Icons.warning_amber_rounded,
-                      color: const Color(0xFFFF5252),
+                      label: 'Waste Spends',
+                      icon: Icons.delete_sweep_rounded,
+                      color: const Color(0xFFEF4444),
                       provider: provider,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildSegmentTab(
+                      tab: MainFilterTab.senders,
+                      label: 'Top Payees',
+                      icon: Icons.person_search_rounded,
+                      color: const Color(0xFF8B5CF6),
+                      provider: provider,
+                      isDark: isDark,
                     ),
                     const SizedBox(width: 8),
                     _buildSegmentTab(
@@ -147,22 +176,37 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       icon: Icons.security_rounded,
                       color: const Color(0xFF6366F1),
                       provider: provider,
+                      isDark: isDark,
                     ),
                   ],
                 ),
               ),
 
-              // Secondary Quick Filters (Year, App, Bank)
-              if (_currentTab != MainFilterTab.otps)
-                _buildQuickFilterPills(provider),
+              // Quick Filter Pills (Year, App, Bank, Payee) OR OTP Filters
+              if (_currentTab == MainFilterTab.otps)
+                _buildOtpQuickFilterPills(provider, isDark)
+              else if (_currentTab != MainFilterTab.senders)
+                _buildQuickFilterPills(provider, isDark),
 
-              const SizedBox(height: 6),
+              // Sum of all amounts dynamic card
+              if (_currentTab != MainFilterTab.senders && _currentTab != MainFilterTab.otps)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                  child: _buildFilterSumCard(provider, isDark),
+                ),
 
-              // Content List (Transactions or OTPs)
+              // OTP Filter count banner
+              if (_currentTab == MainFilterTab.otps && provider.hasActiveOtpFilters)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                  child: _buildOtpFilterSummaryCard(provider, isDark),
+                ),
+
+              const SizedBox(height: 4),
+
+              // Content List
               Expanded(
-                child: _currentTab == MainFilterTab.otps
-                    ? _buildOtpList(provider)
-                    : _buildTransactionList(provider),
+                child: _buildCurrentContent(provider, isDark),
               ),
             ],
           );
@@ -171,12 +215,23 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
+  Widget _buildCurrentContent(TransactionProvider provider, bool isDark) {
+    if (_currentTab == MainFilterTab.otps) {
+      return _buildOtpList(provider, isDark);
+    } else if (_currentTab == MainFilterTab.senders) {
+      return _buildTopPayeesList(provider, isDark);
+    } else {
+      return _buildTransactionList(provider, isDark);
+    }
+  }
+
   Widget _buildSegmentTab({
     required MainFilterTab tab,
     required String label,
     required IconData icon,
     Color? color,
     required TransactionProvider provider,
+    required bool isDark,
   }) {
     final isSelected = _currentTab == tab;
     final activeColor = color ?? AppTheme.primaryColor;
@@ -206,15 +261,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor : Colors.white,
+          color: isSelected
+              ? activeColor
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? activeColor : Colors.black.withOpacity(0.06),
+            color: isSelected
+                ? activeColor
+                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.25),
+                    color: activeColor.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   )
@@ -227,7 +286,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             Icon(
               icon,
               size: 15,
-              color: isSelected ? Colors.white : Colors.grey[700],
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
             ),
             const SizedBox(width: 6),
             Text(
@@ -235,7 +296,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? Colors.white : Colors.grey[800],
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155)),
               ),
             ),
           ],
@@ -244,57 +307,258 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  Widget _buildQuickFilterPills(TransactionProvider provider) {
+  // Sum of all filtered amounts card
+  Widget _buildFilterSumCard(TransactionProvider provider, bool isDark) {
+    final count = provider.filteredTransactionCount;
+    final totalExpense = provider.filteredExpenseSum;
+    final totalIncome = provider.filteredIncomeSum;
+    final net = provider.filteredNetBalance;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'FILTER SUMMARY',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$count txns',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                CurrencyFormatter.format(provider.filteredTotalAmount),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              if (totalIncome > 0)
+                _buildSmallSummaryTag('+$totalIncome', const Color(0xFF10B981), isDark),
+              if (totalIncome > 0 && totalExpense > 0) const SizedBox(width: 8),
+              if (totalExpense > 0)
+                _buildSmallSummaryTag('-$totalExpense', const Color(0xFFEF4444), isDark),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallSummaryTag(String text, Color color, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.15 : 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOtpFilterSummaryCard(TransactionProvider provider, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6366F1).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.security, size: 16, color: Color(0xFF6366F1)),
+              const SizedBox(width: 8),
+              Text(
+                'Showing ${provider.filteredOtps.length} filtered OTP codes',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)),
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: () => provider.clearOtpFilters(),
+            child: const Text('Reset', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF6366F1))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickFilterPills(TransactionProvider provider, bool isDark) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         children: [
-          // Year Filter Pill
+          // Year Filter
           _buildPillDropdown<int>(
             label: provider.selectedYear != null ? 'Year: ${provider.selectedYear}' : 'Year: All',
             isSelected: provider.selectedYear != null,
             items: [null, ...provider.availableYears],
             itemLabel: (y) => y != null ? '$y' : 'All Years',
             onSelected: (y) => provider.setYearFilter(y),
+            isDark: isDark,
           ),
           const SizedBox(width: 8),
 
-          // App Filter Pill
+          // App Filter (Recognized Consumer Apps only)
           _buildPillDropdown<String>(
-            label: provider.selectedApp != null ? 'App: ${provider.selectedApp}' : 'App: All',
+            label: provider.selectedApp != null ? 'App: ${provider.selectedApp}' : 'Apps',
             isSelected: provider.selectedApp != null,
             items: [null, ...provider.availableApps],
-            itemLabel: (a) => a ?? 'All Apps',
+            itemLabel: (a) => a ?? 'All Recognized Apps',
             onSelected: (a) => provider.setAppFilter(a),
+            isDark: isDark,
           ),
           const SizedBox(width: 8),
 
-          // Bank Filter Pill
+          // Payee Filter (Most paid to)
           _buildPillDropdown<String>(
-            label: provider.selectedBank != null ? 'Bank: ${provider.selectedBank}' : 'Bank: All',
+            label: provider.selectedPayee != null ? 'Payee: ${provider.selectedPayee}' : 'Paid To',
+            isSelected: provider.selectedPayee != null,
+            items: [null, ...provider.availablePayees],
+            itemLabel: (p) => p ?? 'All Payees',
+            onSelected: (p) => provider.setPayeeFilter(p),
+            isDark: isDark,
+          ),
+          const SizedBox(width: 8),
+
+          // Bank Filter
+          _buildPillDropdown<String>(
+            label: provider.selectedBank != null ? 'Bank: ${provider.selectedBank}' : 'Bank',
             isSelected: provider.selectedBank != null,
             items: [null, ...provider.availableBanks],
             itemLabel: (b) => b ?? 'All Banks',
             onSelected: (b) => provider.setBankFilter(b),
+            isDark: isDark,
           ),
 
-          if (provider.selectedYear != null ||
-              provider.selectedApp != null ||
-              provider.selectedBank != null ||
-              provider.selectedCategory != null) ...[
+          if (provider.hasActiveFilters) ...[
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () => provider.clearFilters(),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.red[50],
+                  color: const Color(0xFFEF4444).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Text(
                   'Reset Filters',
-                  style: TextStyle(color: Colors.red, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: Color(0xFFEF4444),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOtpQuickFilterPills(TransactionProvider provider, bool isDark) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          _buildPillDropdown<String>(
+            label: provider.selectedOtpService != null
+                ? 'Service: ${provider.selectedOtpService}'
+                : 'Service: All',
+            isSelected: provider.selectedOtpService != null,
+            items: [null, ...provider.availableOtpServices],
+            itemLabel: (s) => s ?? 'All Services',
+            onSelected: (s) => provider.setOtpServiceFilter(s),
+            isDark: isDark,
+          ),
+          const SizedBox(width: 8),
+          _buildPillDropdown<String>(
+            label: provider.selectedOtpSender != null
+                ? 'Sender: ${provider.selectedOtpSender}'
+                : 'Sender: All',
+            isSelected: provider.selectedOtpSender != null,
+            items: [null, ...provider.availableOtpSenders],
+            itemLabel: (s) => s ?? 'All Senders',
+            onSelected: (s) => provider.setOtpSenderFilter(s),
+            isDark: isDark,
+          ),
+          if (provider.hasActiveOtpFilters) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => provider.clearOtpFilters(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'Reset',
+                  style: TextStyle(
+                    color: Color(0xFFEF4444),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -310,24 +574,34 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     required List<T?> items,
     required String Function(T?) itemLabel,
     required ValueChanged<T?> onSelected,
+    required bool isDark,
   }) {
     return PopupMenuButton<T?>(
       onSelected: onSelected,
+      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       itemBuilder: (context) {
         return items.map((item) {
           return PopupMenuItem<T?>(
             value: item,
-            child: Text(itemLabel(item)),
+            child: Text(
+              itemLabel(item),
+              style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+            ),
           );
         }).toList();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.12) : Colors.white,
+          color: isSelected
+              ? AppTheme.primaryColor.withOpacity(0.15)
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? const Color(0xFF6366F1) : Colors.black.withOpacity(0.08),
+            color: isSelected
+                ? AppTheme.primaryColor
+                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
           ),
         ),
         child: Row(
@@ -338,14 +612,18 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? const Color(0xFF6366F1) : Colors.grey[700],
+                color: isSelected
+                    ? AppTheme.primaryColor
+                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
               ),
             ),
             const SizedBox(width: 4),
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
-              color: isSelected ? const Color(0xFF6366F1) : Colors.grey[600],
+              color: isSelected
+                  ? AppTheme.primaryColor
+                  : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
             ),
           ],
         ),
@@ -353,7 +631,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  Widget _buildTransactionList(TransactionProvider provider) {
+  Widget _buildTransactionList(TransactionProvider provider, bool isDark) {
     var list = provider.filteredTransactions;
 
     if (_searchQuery.isNotEmpty) {
@@ -372,16 +650,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inbox_outlined, size: 54, color: Colors.grey[400]),
+            Icon(Icons.inbox_outlined, size: 54, color: isDark ? const Color(0xFF475569) : Colors.grey[400]),
             const SizedBox(height: 12),
             Text(
               'No matching transactions found',
-              style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600],
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
-              'Try adjusting your year, app, or bank filters',
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              'Try adjusting your year, app, or payee filters',
+              style: TextStyle(color: isDark ? const Color(0xFF64748B) : Colors.grey[400], fontSize: 12),
             ),
           ],
         ),
@@ -390,7 +672,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 90),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
       itemCount: list.length,
       itemBuilder: (context, index) {
         final txn = list[index];
@@ -402,8 +684,142 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  Widget _buildOtpList(TransactionProvider provider) {
-    var otps = provider.allOtps;
+  // Top Payees / Senders List
+  Widget _buildTopPayeesList(TransactionProvider provider, bool isDark) {
+    var senders = provider.topPaidSenders;
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      senders = senders.where((s) => s.name.toLowerCase().contains(q)).toList();
+    }
+
+    if (senders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_search_outlined, size: 54, color: isDark ? const Color(0xFF475569) : Colors.grey[400]),
+            const SizedBox(height: 12),
+            Text(
+              'No payee history available',
+              style: TextStyle(
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600],
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
+      itemCount: senders.length,
+      itemBuilder: (context, index) {
+        final payee = senders[index];
+        final isSelected = provider.selectedPayee == payee.name;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: InkWell(
+            onTap: () {
+              provider.setPayeeFilter(payee.name);
+              setState(() {
+                _currentTab = MainFilterTab.all;
+              });
+            },
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isSelected
+                      ? AppTheme.primaryColor
+                      : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                  width: isSelected ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondaryColor.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        payee.name.isNotEmpty ? payee.name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.secondaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          payee.name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${payee.count} transactions • ${payee.percentage.toStringAsFixed(1)}% of total spends',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        CurrencyFormatter.format(payee.totalAmount),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Tap to filter',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOtpList(TransactionProvider provider, bool isDark) {
+    var otps = provider.filteredOtps;
 
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
@@ -420,16 +836,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.security_rounded, size: 54, color: Colors.grey[400]),
+            Icon(Icons.security_rounded, size: 54, color: isDark ? const Color(0xFF475569) : Colors.grey[400]),
             const SizedBox(height: 12),
             Text(
               'No OTP messages found',
-              style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600],
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               'Sync from SMS or wait for new incoming verification codes',
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              style: TextStyle(color: isDark ? const Color(0xFF64748B) : Colors.grey[400], fontSize: 12),
             ),
           ],
         ),
@@ -438,28 +858,30 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 90),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
       itemCount: otps.length,
       itemBuilder: (context, index) {
         final otp = otps[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: _buildOtpCard(context, otp),
+          child: _buildOtpCard(context, otp, isDark),
         );
       },
     );
   }
 
-  Widget _buildOtpCard(BuildContext context, OtpModel otp) {
+  Widget _buildOtpCard(BuildContext context, OtpModel otp, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.02),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -476,10 +898,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.12),
+                      color: AppTheme.primaryColor.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.lock_rounded, size: 16, color: Color(0xFF6366F1)),
+                    child: const Icon(Icons.lock_rounded, size: 16, color: AppTheme.primaryColor),
                   ),
                   const SizedBox(width: 10),
                   Column(
@@ -487,16 +909,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     children: [
                       Text(
                         otp.serviceName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
                       Text(
                         otp.sender,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[400],
+                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
                         ),
                       ),
                     ],
@@ -507,7 +930,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 _formatRelativeTime(otp.dateTime),
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey[500],
+                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -515,34 +938,36 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Big OTP display + Copy button
+          // Monospace OTP digits + One-tap Copy
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey[200]!),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'OTP: ',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                       ),
                     ),
                     Text(
                       otp.code,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 4,
-                        color: Color(0xFF111827),
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                         fontFamily: 'monospace',
                       ),
                     ),
@@ -557,14 +982,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         content: Text('Copied OTP: ${otp.code}'),
                         duration: const Duration(seconds: 2),
                         behavior: SnackBarBehavior.floating,
-                        backgroundColor: const Color(0xFF111827),
+                        backgroundColor: const Color(0xFF10B981),
                       ),
                     );
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1),
+                      color: AppTheme.primaryColor,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Row(
@@ -593,7 +1018,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             otp.body,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[600],
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
               height: 1.3,
             ),
             maxLines: 2,
@@ -615,9 +1040,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   void _showFilterBottomSheet(BuildContext context) {
     final provider = context.read<TransactionProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -628,28 +1055,29 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Filter Transactions',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
               ),
               const SizedBox(height: 16),
               ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Select Year'),
-                trailing: Text(provider.selectedYear != null ? '${provider.selectedYear}' : 'All'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  // pick year
-                },
+                leading: const Icon(Icons.person_search, color: AppTheme.secondaryColor),
+                title: const Text('Filter by Payee'),
+                trailing: Text(provider.selectedPayee ?? 'All'),
+                onTap: () => Navigator.pop(ctx),
               ),
               ListTile(
-                leading: const Icon(Icons.apps_rounded),
-                title: const Text('Filter by App'),
+                leading: const Icon(Icons.apps_rounded, color: AppTheme.primaryColor),
+                title: const Text('Filter by Recognized App'),
                 trailing: Text(provider.selectedApp ?? 'All'),
                 onTap: () => Navigator.pop(ctx),
               ),
               ListTile(
-                leading: const Icon(Icons.account_balance),
+                leading: const Icon(Icons.account_balance, color: Colors.blue),
                 title: const Text('Filter by Bank'),
                 trailing: Text(provider.selectedBank ?? 'All'),
                 onTap: () => Navigator.pop(ctx),
@@ -658,6 +1086,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               ElevatedButton(
                 onPressed: () {
                   provider.clearFilters();
+                  provider.clearOtpFilters();
                   Navigator.pop(ctx);
                 },
                 child: const Text('Clear All Filters'),

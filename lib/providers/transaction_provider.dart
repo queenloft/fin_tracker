@@ -9,6 +9,20 @@ import '../core/utils/date_utils.dart' as app_date_utils;
 
 enum DateRangeType { today, week, month, sixMonths, year, all, custom }
 
+class PayeeSummary {
+  final String name;
+  final double totalAmount;
+  final int count;
+  final double percentage;
+
+  PayeeSummary({
+    required this.name,
+    required this.totalAmount,
+    required this.count,
+    required this.percentage,
+  });
+}
+
 class TransactionProvider with ChangeNotifier {
   final TransactionRepository _repository = TransactionRepository();
   final SmsService _smsService = SmsService();
@@ -29,9 +43,14 @@ class TransactionProvider with ChangeNotifier {
   String? _selectedCategory;
   String? _selectedBank;
   String? _selectedApp;
+  String? _selectedPayee;
   int? _selectedYear;
   bool? _selectedType; // null = all, true = credit, false = debit
   bool _onlyWastedSpends = false;
+
+  // OTP Filters
+  String? _selectedOtpService;
+  String? _selectedOtpSender;
 
   // Getters
   List<TransactionModel> get allTransactions => _allTransactions;
@@ -44,9 +63,74 @@ class TransactionProvider with ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   String? get selectedBank => _selectedBank;
   String? get selectedApp => _selectedApp;
+  String? get selectedPayee => _selectedPayee;
   int? get selectedYear => _selectedYear;
   bool? get selectedType => _selectedType;
   bool get onlyWastedSpends => _onlyWastedSpends;
+
+  String? get selectedOtpService => _selectedOtpService;
+  String? get selectedOtpSender => _selectedOtpSender;
+
+  // Filtered OTPs
+  List<OtpModel> get filteredOtps {
+    var otps = List<OtpModel>.from(_allOtps);
+    if (_selectedOtpService != null) {
+      otps = otps.where((o) => o.serviceName.toLowerCase() == _selectedOtpService!.toLowerCase()).toList();
+    }
+    if (_selectedOtpSender != null) {
+      otps = otps.where((o) => o.sender.toLowerCase() == _selectedOtpSender!.toLowerCase()).toList();
+    }
+    return otps;
+  }
+
+  // OTP available filters
+  List<String> get availableOtpServices {
+    final services = _allOtps.map((o) => o.serviceName).toSet().toList();
+    services.sort();
+    return services;
+  }
+
+  List<String> get availableOtpSenders {
+    final senders = _allOtps.map((o) => o.sender).toSet().toList();
+    senders.sort();
+    return senders;
+  }
+
+  // Sum of all amounts for currently filtered transactions
+  double get filteredTotalAmount {
+    return _filteredTransactions.fold<double>(0.0, (sum, t) => sum + t.amount);
+  }
+
+  double get filteredExpenseSum {
+    return _filteredTransactions
+        .where((t) => !t.isCredit)
+        .fold<double>(0.0, (sum, t) => sum + t.amount);
+  }
+
+  double get filteredIncomeSum {
+    return _filteredTransactions
+        .where((t) => t.isCredit)
+        .fold<double>(0.0, (sum, t) => sum + t.amount);
+  }
+
+  double get filteredNetBalance => filteredIncomeSum - filteredExpenseSum;
+
+  int get filteredTransactionCount => _filteredTransactions.length;
+
+  bool get hasActiveFilters {
+    return _selectedCategory != null ||
+        _selectedBank != null ||
+        _selectedApp != null ||
+        _selectedPayee != null ||
+        _selectedYear != null ||
+        _selectedType != null ||
+        _onlyWastedSpends ||
+        _dateRangeType != DateRangeType.all;
+  }
+
+  bool get hasActiveOtpFilters {
+    return _selectedOtpService != null || _selectedOtpSender != null;
+  }
 
   // Get list of unique banks from transactions
   List<String> get availableBanks {
@@ -69,27 +153,119 @@ class TransactionProvider with ChangeNotifier {
     return years;
   }
 
-  // Get distinct apps/merchants
+  // Get recognized corporate/e-commerce Apps only (Swiggy, Amazon, Uber, Zomato, etc.)
   List<String> get availableApps {
-    final apps = _allTransactions
-        .where((t) => !t.isCredit)
-        .map((t) => _cleanAppName(t.description))
-        .where((name) => name.isNotEmpty && name != 'Transaction' && name != 'Other Merchant')
-        .toSet()
-        .toList();
-    apps.sort();
-    return apps;
+    const recognizedAppNames = [
+      'Swiggy', 'Zomato', 'Amazon', 'Flipkart', 'Blinkit', 'Zepto', 'Instamart',
+      'Uber', 'Ola', 'Rapido', 'Myntra', 'Ajio', 'Meesho', 'Netflix', 'Spotify',
+      'Prime Video', 'Hotstar', 'BigBasket', 'DMart', 'Paytm', 'PhonePe', 'Google Pay',
+      'Cred', 'IRCTC', 'MakeMyTrip', 'BookMyShow', 'Dominos', 'McDonalds', 'Starbucks',
+      'KFC', 'Pizza Hut', 'Apollo Pharmacy', 'PharmEasy', 'Netmeds', 'Tata 1mg',
+      'Zerodha', 'Groww', 'Upstox', 'Airtel', 'Jio', 'Vodafone'
+    ];
+
+    final apps = <String>{};
+    for (final t in _allTransactions) {
+      if (!t.isCredit) {
+        final identified = _identifyCorporateApp(t.description);
+        if (identified != null) {
+          apps.add(identified);
+        }
+      }
+    }
+    final sorted = apps.toList()..sort();
+    return sorted.isNotEmpty ? sorted : recognizedAppNames.take(8).toList();
+  }
+
+  // Top Payees / Senders (Who money was paid to most often or highest sum)
+  List<PayeeSummary> get topPaidSenders {
+    final expenses = _allTransactions.where((t) => !t.isCredit).toList();
+    if (expenses.isEmpty) return [];
+
+    final total = expenses.fold<double>(0.0, (s, t) => s + t.amount);
+    final mapTotals = <String, double>{};
+    final mapCounts = <String, int>{};
+
+    for (final t in expenses) {
+      final name = _cleanPayeeName(t.description);
+      mapTotals[name] = (mapTotals[name] ?? 0.0) + t.amount;
+      mapCounts[name] = (mapCounts[name] ?? 0) + 1;
+    }
+
+    final sorted = mapTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sorted.take(15).map((e) {
+      return PayeeSummary(
+        name: e.key,
+        totalAmount: e.value,
+        count: mapCounts[e.key] ?? 1,
+        percentage: total > 0 ? (e.value / total) * 100 : 0.0,
+      );
+    }).toList();
+  }
+
+  List<String> get availablePayees {
+    return topPaidSenders.map((p) => p.name).toList();
   }
 
   // Initialize and load transactions
   Future<void> initialize() async {
     await loadTransactions();
     _startSmsListener();
-    // Non-blocking auto-sync for any new SMS received while app was closed
     syncFromSMS(limit: 50);
   }
 
-  // Load all transactions from database
+  void _startSmsListener() {
+    _smsService.listenForNewSMS().listen((sms) async {
+      try {
+        if (sms['isOtp'] == true && sms['otp'] != null) {
+          final otp = sms['otp'] as OtpModel;
+          if (!_allOtps.any((o) => o.code == otp.code && o.dateTime == otp.dateTime)) {
+            _allOtps.insert(0, otp);
+            notifyListeners();
+          }
+          return;
+        }
+        final body = sms['body'] as String? ?? '';
+        final sender = sms['sender'] as String? ?? '';
+        final date = sms['date'] as DateTime? ?? DateTime.now();
+        if (body.isEmpty) return;
+        final exists = await _repository.transactionExists(body);
+        if (!exists) {
+          TransactionModel? transaction;
+          try {
+            final aiResult = await _smsService.parseSmsWithAi(body)
+                .timeout(const Duration(seconds: 8), onTimeout: () => null);
+            if (aiResult != null && aiResult['isTransaction'] != false) {
+              transaction = _parserService.createTransactionFromAiResult(
+                aiResult: aiResult,
+                smsBody: body,
+                sender: sender,
+                receivedDate: date,
+              );
+            }
+          } catch (_) {}
+          if (transaction == null) {
+            transaction = _parserService.parseSMS(
+              smsBody: body,
+              sender: sender,
+              receivedDate: date,
+            );
+          }
+          if (transaction != null) {
+            await _repository.addTransaction(transaction);
+            await _notificationService.showTransactionNotification(transaction);
+            await loadTransactions();
+          }
+        }
+      } catch (e) {
+        /* SMS listener error ignored */
+      }
+    });
+  }
+
+  
   Future<void> loadTransactions() async {
     _isLoading = true;
     _error = null;
@@ -97,6 +273,7 @@ class TransactionProvider with ChangeNotifier {
 
     try {
       _allTransactions = await _repository.getAllTransactions();
+      _allOtps = List<OtpModel>.from(_smsService.cachedOtps);
       _applyFilters();
       _isLoading = false;
       notifyListeners();
@@ -107,39 +284,22 @@ class TransactionProvider with ChangeNotifier {
     }
   }
 
-  // Read existing SMS and parse transactions
   Future<void> syncFromSMS({int? limit}) async {
-    if (_isSyncing) return; // prevent concurrent syncs
+    if (_isSyncing) return;
     _isSyncing = true;
     _error = null;
     notifyListeners();
 
     try {
-      print('=== Starting SMS Sync ===');
-      // Read SMS
       final smsList = await _smsService.readExistingSMS(limit: limit);
-      print('Read ${smsList.length} SMS messages');
-      
-      // Collect OTPs
       _allOtps = List<OtpModel>.from(_smsService.cachedOtps);
 
-      // Parse SMS to transactions
       final newTransactions = <TransactionModel>[];
-      int skipped = 0;
-      int parsed = 0;
-      int failed = 0;
-      
       for (final sms in smsList) {
-        // Check if transaction already exists
         final exists = await _repository.transactionExists(sms['body']);
-        if (exists) {
-          skipped++;
-          continue;
-        }
-        
-        TransactionModel? transaction;
+        if (exists) continue;
 
-        // 1. Try AI Assistant parsing first with timeout
+        TransactionModel? transaction;
         try {
           final aiResult = await _smsService.parseSmsWithAi(sms['body'])
               .timeout(const Duration(seconds: 8), onTimeout: () => null);
@@ -151,11 +311,8 @@ class TransactionProvider with ChangeNotifier {
               receivedDate: sms['date'],
             );
           }
-        } catch (e) {
-          print('AI parsing in sync skipped/failed: $e');
-        }
-        
-        // 2. Fallback to enhanced high-accuracy regex parser
+        } catch (_) {}
+
         if (transaction == null) {
           transaction = _parserService.parseSMS(
             smsBody: sms['body'],
@@ -163,107 +320,26 @@ class TransactionProvider with ChangeNotifier {
             receivedDate: sms['date'],
           );
         }
-        
+
         if (transaction != null) {
           newTransactions.add(transaction);
-          parsed++;
-        } else {
-          failed++;
         }
       }
 
-      print('Sync results: Parsed=$parsed, Skipped=$skipped, Failed=$failed');
-
-      // Save new transactions
       if (newTransactions.isNotEmpty) {
         await _repository.addTransactions(newTransactions);
-        print('Successfully saved ${newTransactions.length} transactions');
+        await loadTransactions();
       }
 
-      // Reload transactions
-      await loadTransactions();
       _isSyncing = false;
       notifyListeners();
-      print('=== SMS Sync Complete ===');
     } catch (e) {
-      print('ERROR in syncFromSMS: $e');
       _error = e.toString();
       _isSyncing = false;
       notifyListeners();
     }
   }
 
-  // Start listening for new incoming SMS
-  void _startSmsListener() {
-    _smsService.listenForNewSMS().listen((sms) async {
-      try {
-        // Handle incoming OTP directly
-        if (sms['isOtp'] == true && sms['otp'] != null) {
-          final otp = sms['otp'] as OtpModel;
-          if (!_allOtps.any((o) => o.code == otp.code && o.dateTime == otp.dateTime)) {
-            _allOtps.insert(0, otp);
-            notifyListeners();
-          }
-          return;
-        }
-
-        final body = sms['body'] as String? ?? '';
-        final sender = sms['sender'] as String? ?? '';
-        final date = sms['date'] as DateTime? ?? DateTime.now();
-
-        if (body.isEmpty) return;
-        print('=== New Incoming SMS Detected ===');
-
-        // Check if transaction already exists in database
-        final exists = await _repository.transactionExists(body);
-        if (!exists) {
-          TransactionModel? transaction;
-
-          // 1. Try Gemini AI parsing & categorization first
-          try {
-            print('Categorizing new SMS with Gemini AI...');
-            final aiResult = await _smsService.parseSmsWithAi(body)
-                .timeout(const Duration(seconds: 8), onTimeout: () => null);
-            if (aiResult != null && aiResult['isTransaction'] != false) {
-              transaction = _parserService.createTransactionFromAiResult(
-                aiResult: aiResult,
-                smsBody: body,
-                sender: sender,
-                receivedDate: date,
-              );
-            }
-          } catch (e) {
-            print('Gemini AI parsing failed, falling back to regex: $e');
-          }
-
-          // 2. Fallback to regex parsing if AI failed or unavailable
-          if (transaction == null) {
-            transaction = _parserService.parseSMS(
-              smsBody: body,
-              sender: sender,
-              receivedDate: date,
-            );
-          }
-
-          if (transaction != null) {
-            // Save transaction to local database
-            await _repository.addTransaction(transaction);
-            
-            // Show transaction notification with category
-            await _notificationService.showTransactionNotification(transaction);
-            
-            // Reload all transactions to instantly update expense tracker & dashboard
-            await loadTransactions();
-            print('Expense tracker updated with new transaction!');
-          }
-        }
-      } catch (e) {
-        print('Error processing new SMS: $e');
-      }
-    });
-  }
-
-  // Add transaction manually
   Future<void> addTransaction(TransactionModel transaction) async {
     try {
       await _repository.addTransaction(transaction);
@@ -274,18 +350,6 @@ class TransactionProvider with ChangeNotifier {
     }
   }
 
-  // Delete transaction
-  Future<void> deleteTransaction(String id) async {
-    try {
-      await _repository.deleteTransaction(id);
-      await loadTransactions();
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
-  }
-
-  // Update transaction
   Future<void> updateTransaction(TransactionModel transaction) async {
     try {
       await _repository.updateTransaction(transaction);
@@ -296,7 +360,16 @@ class TransactionProvider with ChangeNotifier {
     }
   }
 
-  // Set date range filter
+  Future<void> deleteTransaction(String id) async {
+    try {
+      await _repository.deleteTransaction(id);
+      await loadTransactions();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
   void setDateRange(DateRangeType type, {DateTime? start, DateTime? end}) {
     _dateRangeType = type;
     if (type == DateRangeType.custom) {
@@ -307,54 +380,70 @@ class TransactionProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Set category filter
   void setCategoryFilter(String? category) {
     _selectedCategory = category;
     _applyFilters();
     notifyListeners();
   }
 
-  // Set bank filter
   void setBankFilter(String? bankName) {
     _selectedBank = bankName;
     _applyFilters();
     notifyListeners();
   }
 
-  // Set app/merchant filter
   void setAppFilter(String? app) {
     _selectedApp = app;
     _applyFilters();
     notifyListeners();
   }
 
-  // Set year filter
+  void setPayeeFilter(String? payee) {
+    _selectedPayee = payee;
+    _applyFilters();
+    notifyListeners();
+  }
+
   void setYearFilter(int? year) {
     _selectedYear = year;
     _applyFilters();
     notifyListeners();
   }
 
-  // Set waste filter
   void setOnlyWastedFilter(bool value) {
     _onlyWastedSpends = value;
     _applyFilters();
     notifyListeners();
   }
 
-  // Set type filter
   void setTypeFilter(bool? isCredit) {
     _selectedType = isCredit;
     _applyFilters();
     notifyListeners();
   }
 
-  // Clear all filters
+  void setOtpServiceFilter(String? service) {
+    _selectedOtpService = service;
+    notifyListeners();
+  }
+
+  void setOtpSenderFilter(String? sender) {
+    _selectedOtpSender = sender;
+    notifyListeners();
+  }
+
+  void clearOtpFilters() {
+    _selectedOtpService = null;
+    _selectedOtpSender = null;
+    notifyListeners();
+  }
+
   void clearFilters() {
     _dateRangeType = DateRangeType.all;
     _selectedCategory = null;
     _selectedBank = null;
     _selectedApp = null;
+    _selectedPayee = null;
     _selectedYear = null;
     _selectedType = null;
     _onlyWastedSpends = false;
@@ -364,11 +453,9 @@ class TransactionProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Apply filters to transactions
   void _applyFilters() {
     var filtered = List<TransactionModel>.from(_allTransactions);
 
-    // Apply date range filter
     DateTime? startDate;
     DateTime? endDate;
 
@@ -409,32 +496,36 @@ class TransactionProvider with ChangeNotifier {
       }).toList();
     }
 
-    // Apply year filter
     if (_selectedYear != null) {
       filtered = filtered.where((t) => t.dateTime.year == _selectedYear).toList();
     }
 
-    // Apply category filter
     if (_selectedCategory != null) {
       filtered = filtered.where((t) => t.category == _selectedCategory).toList();
     }
 
-    // Apply bank filter
     if (_selectedBank != null) {
       filtered = filtered.where((t) => t.bankName == _selectedBank).toList();
     }
 
-    // Apply app/merchant filter
     if (_selectedApp != null) {
-      filtered = filtered.where((t) => _cleanAppName(t.description).toLowerCase() == _selectedApp!.toLowerCase()).toList();
+      filtered = filtered.where((t) {
+        final app = _identifyCorporateApp(t.description);
+        return app != null && app.toLowerCase() == _selectedApp!.toLowerCase();
+      }).toList();
     }
 
-    // Apply waste filter
+    if (_selectedPayee != null) {
+      filtered = filtered.where((t) {
+        final payee = _cleanPayeeName(t.description);
+        return payee.toLowerCase() == _selectedPayee!.toLowerCase();
+      }).toList();
+    }
+
     if (_onlyWastedSpends) {
       filtered = filtered.where((t) => !t.isCredit && t.isUselessSpend()).toList();
     }
 
-    // Apply type filter
     if (_selectedType != null) {
       filtered = filtered.where((t) => t.isCredit == _selectedType).toList();
     }
@@ -484,7 +575,8 @@ class TransactionProvider with ChangeNotifier {
     }
   }
 
-  String _cleanAppName(String raw) {
+  // Filter ONLY legitimate consumer apps and merchants
+  static String? _identifyCorporateApp(String raw) {
     final lower = raw.toLowerCase().trim();
     if (lower.contains('swiggy')) return 'Swiggy';
     if (lower.contains('zomato')) return 'Zomato';
@@ -501,22 +593,62 @@ class TransactionProvider with ChangeNotifier {
     if (lower.contains('meesho')) return 'Meesho';
     if (lower.contains('netflix')) return 'Netflix';
     if (lower.contains('spotify')) return 'Spotify';
-    if (lower.contains('prime')) return 'Prime';
+    if (lower.contains('prime video') || lower.contains('amazon prime')) return 'Prime Video';
     if (lower.contains('hotstar')) return 'Hotstar';
     if (lower.contains('bigbasket')) return 'BigBasket';
     if (lower.contains('dmart')) return 'DMart';
     if (lower.contains('paytm')) return 'Paytm';
     if (lower.contains('phonepe')) return 'PhonePe';
-    if (lower.contains('google')) return 'Google';
+    if (lower.contains('google pay') || lower.contains('gpay')) return 'Google Pay';
     if (lower.contains('cred')) return 'Cred';
     if (lower.contains('irctc')) return 'IRCTC';
     if (lower.contains('makemytrip')) return 'MakeMyTrip';
     if (lower.contains('bookmyshow')) return 'BookMyShow';
+    if (lower.contains('dominos') || lower.contains('domino\'s')) return 'Dominos';
+    if (lower.contains('mcdonald')) return 'McDonalds';
+    if (lower.contains('starbucks')) return 'Starbucks';
+    if (lower.contains('kfc')) return 'KFC';
+    if (lower.contains('pizza hut')) return 'Pizza Hut';
+    if (lower.contains('apollo')) return 'Apollo Pharmacy';
+    if (lower.contains('pharmeasy')) return 'PharmEasy';
+    if (lower.contains('netmeds')) return 'Netmeds';
+    if (lower.contains('1mg')) return 'Tata 1mg';
+    if (lower.contains('zerodha')) return 'Zerodha';
+    if (lower.contains('groww')) return 'Groww';
+    if (lower.contains('upstox')) return 'Upstox';
+    if (lower.contains('airtel')) return 'Airtel';
+    if (lower.contains('jio')) return 'Jio';
+    if (lower.contains('vodafone') || lower.contains('vi ')) return 'Vodafone';
+    return null;
+  }
 
-    final cleaned = raw.replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '').trim();
-    if (cleaned.isEmpty) return 'Other Merchant';
-    final words = cleaned.split(RegExp(r'\s+'));
-    return words.take(2).join(' ');
+  // Extract clean Payee / Receiver name (strips raw UPI addresses like user@okaxis)
+  static String _cleanPayeeName(String raw) {
+    final app = _identifyCorporateApp(raw);
+    if (app != null) return app;
+
+    var text = raw.trim();
+    if (text.contains('@')) {
+      final handle = text.split('@').first;
+      text = handle.split('.').first;
+    }
+
+    text = text.replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), ' ').trim();
+    text = text.replaceAll(RegExp(r'\s+'), ' ');
+
+    final bankingTerms = {
+      'upi', 'vpa', 'imps', 'neft', 'rtgs', 'txn', 'transfer', 'ac', 'a c',
+      'ref', 'reference', 'bank', 'payment', 'inr', 'rs', 'debited', 'credited',
+      'sent', 'paid', 'account', 'card', 'pos', 'atm', 'nach', 'ecs'
+    };
+
+    final words = text.split(' ').where((w) => !bankingTerms.contains(w.toLowerCase()) && w.length > 1).toList();
+    if (words.isEmpty) return 'Other Payee';
+
+    return words.take(2).map((w) {
+      if (w.isEmpty) return '';
+      return w[0].toUpperCase() + w.substring(1).toLowerCase();
+    }).join(' ');
   }
 
   @override
