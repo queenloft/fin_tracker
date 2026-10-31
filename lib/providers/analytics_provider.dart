@@ -20,6 +20,10 @@ class AnalyticsProvider with ChangeNotifier {
   String? _topCategory;
   List<String> _insights = [];
   List<MonthlyData> _monthlyTrend = [];
+  List<AppSpendItem> _topApps = [];
+  Map<String, double> _wastedByApp = {};
+  Map<String, Map<String, double>> _bankBreakdown = {};
+  List<AiExpenseSuggestion> _smartSuggestions = [];
 
   // Getters
   double get totalIncome => _totalIncome;
@@ -32,6 +36,10 @@ class AnalyticsProvider with ChangeNotifier {
   String? get topCategory => _topCategory;
   List<String> get insights => _insights;
   List<MonthlyData> get monthlyTrend => _monthlyTrend;
+  List<AppSpendItem> get topApps => _topApps;
+  Map<String, double> get wastedByApp => _wastedByApp;
+  Map<String, Map<String, double>> get bankBreakdown => _bankBreakdown;
+  List<AiExpenseSuggestion> get smartSuggestions => _smartSuggestions;
 
   // Update analytics with current transactions
   void updateAnalytics(List<TransactionModel> transactions) {
@@ -62,6 +70,10 @@ class AnalyticsProvider with ChangeNotifier {
     _categoryBreakdown = _analyticsService.getCategoryBreakdown(_currentTransactions);
     _biggestExpense = _analyticsService.getBiggestExpense(_currentTransactions);
     _topCategory = _analyticsService.getTopSpendingCategory(_currentTransactions);
+    _topApps = _analyticsService.getTopAppSpends(_currentTransactions);
+    _wastedByApp = _analyticsService.getWastedMoneyByApp(_currentTransactions);
+    _bankBreakdown = _analyticsService.getBankBreakdown(_currentTransactions);
+    _smartSuggestions = _analyticsService.getSmartSavingsSuggestions(_currentTransactions);
   }
 
   // Generate insights
@@ -111,16 +123,14 @@ class AnalyticsProvider with ChangeNotifier {
         startDate = DateTime(now.year - 1, now.month, now.day);
         break;
       case TimeRange.all:
-        startDate = DateTime(2000, 1, 1); // Very old date to include all
+        startDate = DateTime(2000, 1, 1);
         break;
     }
     
-    // Filter transactions for the selected range
     final filteredTransactions = _trendTransactions.where((t) {
       return t.dateTime.isAfter(startDate) && t.dateTime.isBefore(now);
     }).toList();
     
-    // Update category breakdown and other metrics for the filtered range
     _categoryBreakdown = _analyticsService.getCategoryBreakdown(filteredTransactions);
     _totalIncome = _analyticsService.getTotalIncome(filteredTransactions);
     _totalExpense = _analyticsService.getTotalExpense(filteredTransactions);
@@ -129,6 +139,10 @@ class AnalyticsProvider with ChangeNotifier {
     _uselessSpendPercentage = _analyticsService.getUselessSpendPercentage(filteredTransactions);
     _biggestExpense = _analyticsService.getBiggestExpense(filteredTransactions);
     _topCategory = _analyticsService.getTopSpendingCategory(filteredTransactions);
+    _topApps = _analyticsService.getTopAppSpends(filteredTransactions);
+    _wastedByApp = _analyticsService.getWastedMoneyByApp(filteredTransactions);
+    _bankBreakdown = _analyticsService.getBankBreakdown(filteredTransactions);
+    _smartSuggestions = _analyticsService.getSmartSavingsSuggestions(filteredTransactions);
     
     notifyListeners();
   }
@@ -154,7 +168,6 @@ class AnalyticsProvider with ChangeNotifier {
     }
   }
 
-  // Get previous period transactions based on current date range
   static List<TransactionModel> getPreviousPeriodTransactions(
     List<TransactionModel> allTransactions,
     DateTime currentStart,

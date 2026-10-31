@@ -1,8 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:another_telephony/telephony.dart';
 import '../core/constants/sms_patterns.dart';
 import 'gemini_service.dart';
+import '../data/models/otp_model.dart';
 
 class SmsService {
   final Telephony telephony = Telephony.instance;
@@ -17,6 +18,9 @@ class SmsService {
   int _finalBankSms = 0;
   final List<Map<String, String>> _filteredOutSamples = [];
   final List<String> _debugLogs = [];
+  final List<OtpModel> _cachedOtps = [];
+
+  List<OtpModel> get cachedOtps => List.unmodifiable(_cachedOtps);
 
   // Debug getters
   int get totalSmsRead => _totalSmsRead;
@@ -245,6 +249,62 @@ class SmsService {
   void stopListening() {
     _smsStreamController?.close();
     _smsStreamController = null;
+  }
+
+  // Extract OTP details from SMS
+  OtpModel? extractOtpDetails(String sender, String body, DateTime date) {
+    final lower = body.toLowerCase();
+    
+    // Pattern match 4 to 8 digit OTP
+    final patterns = [
+      RegExp(r'(?:otp|code|verification code|is|password)[\s:]*([0-9]{4,8})\b', caseSensitive: false),
+      RegExp(r'\b([0-9]{4,8})[\s]*(?:is your|as your|for your|otp|code)', caseSensitive: false),
+      RegExp(r'\b([0-9]{4,6})\b'),
+    ];
+
+    String? code;
+    for (final p in patterns) {
+      final match = p.firstMatch(body);
+      if (match != null) {
+        code = match.group(1);
+        if (code != null && code.length >= 4 && code.length <= 8) break;
+      }
+    }
+
+    if (code == null) return null;
+
+    // Detect service name
+    String service = 'Verification';
+    if (lower.contains('amazon')) service = 'Amazon';
+    else if (lower.contains('swiggy')) service = 'Swiggy';
+    else if (lower.contains('zomato')) service = 'Zomato';
+    else if (lower.contains('flipkart')) service = 'Flipkart';
+    else if (lower.contains('google')) service = 'Google';
+    else if (lower.contains('whatsapp')) service = 'WhatsApp';
+    else if (lower.contains('paytm')) service = 'Paytm';
+    else if (lower.contains('phonepe')) service = 'PhonePe';
+    else if (lower.contains('hdfc')) service = 'HDFC Bank';
+    else if (lower.contains('sbi')) service = 'SBI Bank';
+    else if (lower.contains('icici')) service = 'ICICI Bank';
+    else if (lower.contains('axis')) service = 'Axis Bank';
+    else if (lower.contains('kotak')) service = 'Kotak Bank';
+    else if (lower.contains('uber')) service = 'Uber';
+    else if (lower.contains('ola')) service = 'Ola';
+    else if (lower.contains('irctc')) service = 'IRCTC';
+    else if (lower.contains('blinkit')) service = 'Blinkit';
+    else if (lower.contains('zepto')) service = 'Zepto';
+    else if (sender.isNotEmpty) {
+      service = sender.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    }
+
+    return OtpModel(
+      id: '${date.millisecondsSinceEpoch}_$code',
+      sender: sender,
+      code: code,
+      body: body,
+      dateTime: date,
+      serviceName: service,
+    );
   }
 
   // Filter bank/transactional SMS

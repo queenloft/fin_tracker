@@ -1,4 +1,4 @@
-import '../data/models/transaction_model.dart';
+﻿import '../data/models/transaction_model.dart';
 import '../core/utils/date_utils.dart' as app_date_utils;
 import '../services/categorization_service.dart';
 
@@ -107,7 +107,6 @@ class AnalyticsService {
     // Current period stats
     final currentExpense = getTotalExpense(currentTransactions);
     final currentIncome = getTotalIncome(currentTransactions);
-    final currentUseless = getUselessSpends(currentTransactions);
     final currentUselessPercent = getUselessSpendPercentage(currentTransactions);
 
     // Previous period stats
@@ -212,6 +211,238 @@ class AnalyticsService {
     final total = transactions.fold<double>(0.0, (sum, t) => sum + t.amount);
     return total / transactions.length;
   }
+  // Get App spending breakdown (e.g. Swiggy, Amazon, Zomato, Uber, Blinkit)
+  Map<String, double> getAppSpendingBreakdown(List<TransactionModel> transactions) {
+    final breakdown = <String, double>{};
+    for (final t in transactions) {
+      if (!t.isCredit) {
+        final app = _cleanAppName(t.description);
+        breakdown[app] = (breakdown[app] ?? 0.0) + t.amount;
+      }
+    }
+    return breakdown;
+  }
+
+  // Get Top Spending Apps with percentages
+  List<AppSpendItem> getTopAppSpends(List<TransactionModel> transactions, {int limit = 8}) {
+    final expenses = transactions.where((t) => !t.isCredit).toList();
+    if (expenses.isEmpty) return [];
+
+    final totalExpense = expenses.fold<double>(0.0, (sum, t) => sum + t.amount);
+    final appTotals = <String, double>{};
+    final appCounts = <String, int>{};
+
+    for (final t in expenses) {
+      final app = _cleanAppName(t.description);
+      appTotals[app] = (appTotals[app] ?? 0.0) + t.amount;
+      appCounts[app] = (appCounts[app] ?? 0) + 1;
+    }
+
+    final sortedEntries = appTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sortedEntries.take(limit).map((entry) {
+      final spent = entry.value;
+      final count = appCounts[entry.key] ?? 1;
+      final percentage = totalExpense > 0 ? (spent / totalExpense) * 100 : 0.0;
+      return AppSpendItem(
+        appName: entry.key,
+        totalSpent: spent,
+        count: count,
+        percentage: percentage,
+      );
+    }).toList();
+  }
+
+  // Get Bank spending & credit breakdown
+  Map<String, Map<String, double>> getBankBreakdown(List<TransactionModel> transactions) {
+    final breakdown = <String, Map<String, double>>{};
+    for (final t in transactions) {
+      final bank = t.bankName.isNotEmpty && t.bankName != 'Unknown' ? t.bankName : 'Other Bank';
+      if (!breakdown.containsKey(bank)) {
+        breakdown[bank] = {'debit': 0.0, 'credit': 0.0, 'count': 0.0};
+      }
+      if (t.isCredit) {
+        breakdown[bank]!['credit'] = (breakdown[bank]!['credit'] ?? 0.0) + t.amount;
+      } else {
+        breakdown[bank]!['debit'] = (breakdown[bank]!['debit'] ?? 0.0) + t.amount;
+      }
+      breakdown[bank]!['count'] = (breakdown[bank]!['count'] ?? 0.0) + 1;
+    }
+    return breakdown;
+  }
+
+  // Wasted money breakdown by app
+  Map<String, double> getWastedMoneyByApp(List<TransactionModel> transactions) {
+    final waste = <String, double>{};
+    for (final t in transactions) {
+      if (!t.isCredit && _categorizationService.isUselessSpend(t.category)) {
+        final app = _cleanAppName(t.description);
+        waste[app] = (waste[app] ?? 0.0) + t.amount;
+      }
+    }
+    return waste;
+  }
+
+  // AI-inspired smart suggestions on what expenses can be ignored / cut down
+  List<AiExpenseSuggestion> getSmartSavingsSuggestions(List<TransactionModel> transactions) {
+    final suggestions = <AiExpenseSuggestion>[];
+    final expenses = transactions.where((t) => !t.isCredit).toList();
+    if (expenses.isEmpty) return [];
+
+    final totalExpense = expenses.fold<double>(0.0, (sum, t) => sum + t.amount);
+    final appTotals = <String, double>{};
+    final appCounts = <String, int>{};
+
+    for (final t in expenses) {
+      final app = _cleanAppName(t.description);
+      appTotals[app] = (appTotals[app] ?? 0.0) + t.amount;
+      appCounts[app] = (appCounts[app] ?? 0) + 1;
+    }
+
+    // 1. Food Delivery Overuse
+    final foodExpenses = expenses.where((t) => t.category == 'Food Delivery').toList();
+    final foodTotal = foodExpenses.fold<double>(0.0, (s, t) => s + t.amount);
+    if (foodTotal > 1000) {
+      final potential = foodTotal * 0.45;
+      suggestions.add(AiExpenseSuggestion(
+        title: 'High Food Delivery Spend',
+        description: 'You placed ${foodExpenses.length} food orders totaling ₹${foodTotal.toStringAsFixed(0)}. Cooking at home or cutting 40% of orders can save significantly.',
+        potentialSavings: potential,
+        severity: foodTotal > 4000 ? 'high' : 'medium',
+        category: 'Food Delivery',
+      ));
+    }
+
+    // 2. Subscriptions Bloat
+    final subExpenses = expenses.where((t) => t.category == 'Subscriptions').toList();
+    final subTotal = subExpenses.fold<double>(0.0, (s, t) => s + t.amount);
+    if (subTotal > 500) {
+      final potential = subTotal * 0.50;
+      suggestions.add(AiExpenseSuggestion(
+        title: 'Recurring Subscriptions Check',
+        description: 'You spent ₹${subTotal.toStringAsFixed(0)} across ${subExpenses.length} subscription services. Review and pause unused OTT or streaming plans.',
+        potentialSavings: potential,
+        severity: 'medium',
+        category: 'Subscriptions',
+      ));
+    }
+
+    // 3. Impulsive E-Commerce / Shopping
+    final shopExpenses = expenses.where((t) => t.category == 'Online Shopping').toList();
+    final shopTotal = shopExpenses.fold<double>(0.0, (s, t) => s + t.amount);
+    if (shopTotal > 2000) {
+      final potential = shopTotal * 0.35;
+      suggestions.add(AiExpenseSuggestion(
+        title: 'Discretionary Shopping Impulse',
+        description: 'Online shopping accounted for ₹${shopTotal.toStringAsFixed(0)}. Applying the 48-hour rule before purchasing non-essentials could save money.',
+        potentialSavings: potential,
+        severity: shopTotal > 6000 ? 'high' : 'low',
+        category: 'Online Shopping',
+      ));
+    }
+
+    // 4. Quick Commerce Micro-Orders (Zepto/Blinkit/Instamart)
+    final quickCommerce = expenses.where((t) {
+      final desc = t.description.toLowerCase();
+      return desc.contains('blinkit') || desc.contains('zepto') || desc.contains('instamart');
+    }).toList();
+    if (quickCommerce.length >= 4) {
+      final quickTotal = quickCommerce.fold<double>(0.0, (s, t) => s + t.amount);
+      suggestions.add(AiExpenseSuggestion(
+        title: 'Frequent Quick Commerce Deliveries',
+        description: '${quickCommerce.length} separate orders detected (₹${quickTotal.toStringAsFixed(0)}). Batching orders weekly avoids repeat delivery surge fees.',
+        potentialSavings: quickCommerce.length * 35.0,
+        severity: 'low',
+        category: 'Groceries',
+      ));
+    }
+
+    // 5. General Discretionary / Useless Spend Check
+    final uselessTotal = _categorizationService.getTotalUselessSpends(transactions);
+    final uselessPct = totalExpense > 0 ? (uselessTotal / totalExpense) * 100 : 0.0;
+    if (uselessPct > 25) {
+      suggestions.add(AiExpenseSuggestion(
+        title: 'Waste of Money Alert: ${uselessPct.toStringAsFixed(0)}% Discretionary',
+        description: '₹${uselessTotal.toStringAsFixed(0)} went into dining out, shopping sprees, and entertainment. Reducing these by 30% boosts your monthly savings.',
+        potentialSavings: uselessTotal * 0.30,
+        severity: uselessPct > 45 ? 'high' : 'medium',
+        category: 'Other',
+      ));
+    }
+
+    return suggestions;
+  }
+
+  // Clean app name helper
+  String _cleanAppName(String raw) {
+    final lower = raw.toLowerCase().trim();
+    if (lower.contains('swiggy')) return 'Swiggy';
+    if (lower.contains('zomato')) return 'Zomato';
+    if (lower.contains('amazon')) return 'Amazon';
+    if (lower.contains('flipkart')) return 'Flipkart';
+    if (lower.contains('blinkit')) return 'Blinkit';
+    if (lower.contains('zepto')) return 'Zepto';
+    if (lower.contains('instamart')) return 'Instamart';
+    if (lower.contains('uber')) return 'Uber';
+    if (lower.contains('ola')) return 'Ola';
+    if (lower.contains('rapido')) return 'Rapido';
+    if (lower.contains('myntra')) return 'Myntra';
+    if (lower.contains('ajio')) return 'Ajio';
+    if (lower.contains('meesho')) return 'Meesho';
+    if (lower.contains('netflix')) return 'Netflix';
+    if (lower.contains('spotify')) return 'Spotify';
+    if (lower.contains('prime')) return 'Prime';
+    if (lower.contains('hotstar')) return 'Hotstar';
+    if (lower.contains('bigbasket')) return 'BigBasket';
+    if (lower.contains('dmart')) return 'DMart';
+    if (lower.contains('paytm')) return 'Paytm';
+    if (lower.contains('phonepe')) return 'PhonePe';
+    if (lower.contains('google')) return 'Google';
+    if (lower.contains('cred')) return 'Cred';
+    if (lower.contains('irctc')) return 'IRCTC';
+    if (lower.contains('makemytrip')) return 'MakeMyTrip';
+    if (lower.contains('bookmyshow')) return 'BookMyShow';
+
+    final cleaned = raw.replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '').trim();
+    if (cleaned.isEmpty) return 'Other Merchant';
+    final words = cleaned.split(RegExp(r'\s+'));
+    return words.take(2).join(' ');
+  }
+}
+
+// App spend item model
+class AppSpendItem {
+  final String appName;
+  final double totalSpent;
+  final int count;
+  final double percentage;
+
+  AppSpendItem({
+    required this.appName,
+    required this.totalSpent,
+    required this.count,
+    required this.percentage,
+  });
+}
+
+// AI expense suggestion model
+class AiExpenseSuggestion {
+  final String title;
+  final String description;
+  final double potentialSavings;
+  final String severity; // 'high', 'medium', 'low'
+  final String category;
+  final String app;
+
+  AiExpenseSuggestion({
+    required this.title,
+    required this.description,
+    required this.potentialSavings,
+    required this.severity,
+    required this.category,
+    this.app = '',
+  });
 }
 
 // Monthly data model for trends
