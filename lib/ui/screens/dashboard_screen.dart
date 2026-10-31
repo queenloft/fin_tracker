@@ -5,14 +5,12 @@ import '../../providers/transaction_provider.dart';
 import '../../providers/analytics_provider.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/theme/app_theme.dart';
-import '../widgets/summary_card.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/ios18_floating_tab_bar.dart';
 import 'analytics_screen.dart';
 import 'transactions_screen.dart';
 import 'ai_waste_screen.dart';
 import 'settings_screen.dart';
-import 'add_transaction_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,6 +21,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  final List<int> _navigationHistory = [0]; // tracks tab navigation for hardware Back button
   TransactionProvider? _transactionProvider;
 
   @override
@@ -91,46 +90,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _navigateToTab(int index) {
+    if (_selectedIndex == index) return;
+    setState(() {
+      _selectedIndex = index;
+      _navigationHistory.add(index);
+    });
+    if (index == 0) {
+      final tp = context.read<TransactionProvider>();
+      tp.setTypeFilter(null);
+      tp.setCategoryFilter(null);
+      tp.setBankFilter(null);
+      tp.setAppFilter(null);
+      _refreshData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
       _buildDashboardContent(),
       AnalyticsScreen(
-        onNavigateTab: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        onNavigateTab: (index) => _navigateToTab(index),
       ),
       const TransactionsScreen(),
       AiWasteScreen(
-        onNavigateTab: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        onNavigateTab: (index) => _navigateToTab(index),
       ),
       const SettingsScreen(),
     ];
 
-    return Scaffold(
-      extendBody: true,
-      body: screens[_selectedIndex],
-      bottomNavigationBar: Ios18FloatingTabBar(
-        selectedIndex: _selectedIndex,
-        onTabSelected: (index) {
+    // PopScope intercepts Android Back button so app doesn't immediately close
+    return PopScope(
+      canPop: _selectedIndex == 0 && _navigationHistory.length <= 1,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+
+        // If currently on any subtab (e.g. Activity, Analytics, Waste, Settings), pop back to Dashboard
+        if (_navigationHistory.length > 1) {
           setState(() {
-            _selectedIndex = index;
+            _navigationHistory.removeLast();
+            _selectedIndex = _navigationHistory.last;
           });
-          if (index == 0) {
-            final tp = context.read<TransactionProvider>();
-            tp.setTypeFilter(null);
-            tp.setCategoryFilter(null);
-            tp.setBankFilter(null);
-            tp.setAppFilter(null);
-            _refreshData();
-          }
-        },
+        } else if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+            _navigationHistory.clear();
+            _navigationHistory.add(0);
+          });
+        }
+      },
+      child: Scaffold(
+        extendBody: true,
+        body: screens[_selectedIndex],
+        bottomNavigationBar: Ios18FloatingTabBar(
+          selectedIndex: _selectedIndex,
+          onTabSelected: (index) => _navigateToTab(index),
+        ),
       ),
     );
   }
@@ -383,11 +399,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedIndex = 2; // Jump to activity/transactions
-                          });
-                        },
+                        onTap: () => _navigateToTab(2), // Jump to activity/transactions
                         child: Text(
                           'See All',
                           style: TextStyle(
@@ -437,7 +449,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final tx = transactionProvider.filteredTransactions.take(8).toList()[index];
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: TransactionCard(transaction: tx),
+                          child: TransactionCard(
+                            transaction: tx,
+                            // Clicking on a transaction directs to Activity (Tab 2) and filters to that transaction
+                            onTap: () {
+                              _navigateToTab(2);
+                            },
+                          ),
                         );
                       },
                       childCount: transactionProvider.filteredTransactions.take(8).length,
@@ -696,24 +714,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool isDark,
   ) {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedIndex = 3; // Navigate to AI & Waste tab
-        });
-      },
+      onTap: () => _navigateToTab(3), // Navigate to AI & Waste tab
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
+          color: isDark ? const Color(0xFF450A0A) : const Color(0xFFFEF2F2),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFFECACA)),
+          border: Border.all(
+            color: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFECACA),
+          ),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFEE2E2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(isDark ? 0.3 : 0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -729,12 +745,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Row(
                     children: [
-                      const Text(
+                      Text(
                         'Waste of Money Detected',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF991B1B),
+                          color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -758,9 +774,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 2),
                   Text(
                     '₹${CurrencyFormatter.format(provider.uselessSpends)} in food delivery, shopping & impulses',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
-                      color: Color(0xFFB91C1C),
+                      color: isDark ? const Color(0xFFF87171) : const Color(0xFFB91C1C),
                     ),
                   ),
                 ],
@@ -802,9 +818,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: GestureDetector(
                 onTap: () {
                   transactionProvider.setAppFilter(item.appName);
-                  setState(() {
-                    _selectedIndex = 2; // Jump to activity filtered
-                  });
+                  _navigateToTab(2); // Jump to activity filtered
                 },
                 child: Container(
                   margin: const EdgeInsets.only(right: 6),
@@ -832,7 +846,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 2),
                       Text(
                         CurrencyFormatter.format(item.totalAmount),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: AppTheme.primaryColor,

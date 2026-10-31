@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../data/models/transaction_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/currency_formatter.dart';
@@ -6,26 +7,32 @@ import '../../core/utils/date_utils.dart' as app_date_utils;
 
 class TransactionCard extends StatelessWidget {
   final TransactionModel transaction;
+  final VoidCallback? onTap;
 
   const TransactionCard({
     super.key,
     required this.transaction,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final categoryIcon = AppConstants.categoryIcons[transaction.category] ?? Icons.category_rounded;
     final categoryColor = AppConstants.categoryColors[transaction.category] ?? const Color(0xFF6366F1);
     final isWaste = transaction.isUselessSpend() && !transaction.isCredit;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.015),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.02),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -35,7 +42,7 @@ class TransactionCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => _showDetails(context),
+          onTap: onTap ?? () => _showDetails(context, isDark),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
@@ -45,7 +52,7 @@ class TransactionCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: categoryColor.withOpacity(0.12),
+                    color: categoryColor.withOpacity(isDark ? 0.2 : 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
@@ -68,10 +75,11 @@ class TransactionCard extends StatelessWidget {
                               transaction.description,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14.5,
                                 letterSpacing: -0.2,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
                               ),
                             ),
                           ),
@@ -80,15 +88,15 @@ class TransactionCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFF5252).withOpacity(0.12),
+                                color: const Color(0xFFEF4444).withOpacity(isDark ? 0.2 : 0.12),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Text(
                                 'Waste',
                                 style: TextStyle(
-                                  color: Color(0xFFFF5252),
+                                  color: Color(0xFFEF4444),
                                   fontSize: 10,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -101,48 +109,61 @@ class TransactionCard extends StatelessWidget {
                           Text(
                             transaction.category,
                             style: TextStyle(
-                              fontSize: 11.5,
-                              color: Colors.grey[600],
+                              fontSize: 12,
                               fontWeight: FontWeight.w500,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                             ),
                           ),
                           if (transaction.bankName.isNotEmpty && transaction.bankName != 'Unknown') ...[
                             Text(
-                              ' • ${transaction.bankName}',
+                              ' • ',
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFF64748B) : const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            Text(
+                              transaction.bankName,
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.grey[400],
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
                               ),
                             ),
                           ],
-                          Text(
-                            ' • ${app_date_utils.DateUtils.formatRelativeDate(transaction.dateTime)}',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: Colors.grey[400],
-                            ),
-                          ),
                         ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 10),
 
-                const SizedBox(width: 8),
-
-                // Amount
-                Text(
-                  transaction.isCredit
-                      ? '+${CurrencyFormatter.format(transaction.amount)}'
-                      : '-${CurrencyFormatter.format(transaction.amount)}',
-                  style: TextStyle(
-                    color: transaction.isCredit
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF111827),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    letterSpacing: -0.3,
-                  ),
+                // Amount & Date
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      transaction.isCredit
+                          ? '+${CurrencyFormatter.format(transaction.amount)}'
+                          : '-${CurrencyFormatter.format(transaction.amount)}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: transaction.isCredit
+                            ? const Color(0xFF10B981)
+                            : (isDark ? Colors.white : const Color(0xFF0F172A)),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      app_date_utils.DateUtils.formatRelativeDate(transaction.dateTime),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -152,15 +173,19 @@ class TransactionCard extends StatelessWidget {
     );
   }
 
-  void _showDetails(BuildContext context) {
+  void _showDetails(BuildContext context, bool isDark) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -172,7 +197,7 @@ class TransactionCard extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: isDark ? const Color(0xFF475569) : Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -186,7 +211,7 @@ class TransactionCard extends StatelessWidget {
                     height: 56,
                     decoration: BoxDecoration(
                       color: (AppConstants.categoryColors[transaction.category] ?? Colors.grey)
-                          .withOpacity(0.15),
+                          .withOpacity(isDark ? 0.25 : 0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Icon(
@@ -205,33 +230,37 @@ class TransactionCard extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       color: transaction.isCredit
                           ? const Color(0xFF10B981)
-                          : const Color(0xFF111827),
+                          : (isDark ? Colors.white : const Color(0xFF0F172A)),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     transaction.description,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            const Divider(),
+            Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
             const SizedBox(height: 12),
-            _buildDetailRow('Category', transaction.category),
-            _buildDetailRow('Date & Time', app_date_utils.DateUtils.formatDateTime(transaction.dateTime)),
-            _buildDetailRow('Bank / Channel', transaction.bankName),
-            _buildDetailRow('Type', transaction.isCredit ? 'Income (Credit)' : 'Expense (Debit)'),
+            _buildDetailRow('Category', transaction.category, isDark),
+            _buildDetailRow('Date & Time', app_date_utils.DateUtils.formatDateTime(transaction.dateTime), isDark),
+            _buildDetailRow('Bank / Channel', transaction.bankName, isDark),
+            _buildDetailRow('Type', transaction.isCredit ? 'Income (Credit)' : 'Expense (Debit)', isDark),
             if (transaction.isUselessSpend())
-              _buildDetailRow('Classification', 'Discretionary / Waste of Money', isAlert: true),
+              _buildDetailRow('Classification', 'Discretionary / Waste of Money', isDark, isAlert: true),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'RAW SMS BODY',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Colors.grey,
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey,
                 letterSpacing: 0.8,
               ),
             ),
@@ -240,13 +269,19 @@ class TransactionCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
+                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[200]!),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF334155) : Colors.grey[200]!,
+                ),
               ),
               child: Text(
                 transaction.rawSms,
-                style: TextStyle(fontSize: 12, color: Colors.grey[700], height: 1.3),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? const Color(0xFFCBD5E1) : Colors.grey[700],
+                  height: 1.3,
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -256,19 +291,27 @@ class TransactionCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value, {bool isAlert = false}) {
+  Widget _buildDetailRow(String label, String value, bool isDark, {bool isAlert = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+          ),
           Text(
             value,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: isAlert ? const Color(0xFFEF4444) : Colors.black87,
+              color: isAlert
+                  ? const Color(0xFFEF4444)
+                  : (isDark ? Colors.white : const Color(0xFF0F172A)),
             ),
           ),
         ],

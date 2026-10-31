@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../providers/analytics_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../core/utils/currency_formatter.dart';
@@ -14,22 +15,26 @@ class AiWasteScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome, color: Color(0xFF6366F1), size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.auto_awesome, color: AppTheme.primaryColor, size: 22),
+            const SizedBox(width: 8),
             Text(
               'AI & Waste Analysis',
               style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 19,
-                letterSpacing: -0.4,
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+                letterSpacing: -0.5,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
               ),
             ),
           ],
@@ -50,213 +55,155 @@ class AiWasteScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: _buildWasteHeroCard(context, wastedTotal, wastedPct, txnProvider),
+                  child: _buildWasteHeroCard(context, wastedTotal, wastedPct, txnProvider, isDark),
                 ),
               ),
+
+              // Breakdown of Wasted Spends by Category Pie
+              if (analytics.wastedByApp.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: _buildWastedPieCard(analytics.wastedByApp, wastedTotal, isDark),
+                  ),
+                ),
 
               // AI Suggestions: "What Expenses Can I Ignore / Cut Down?"
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.12),
+                          color: AppTheme.primaryColor.withOpacity(isDark ? 0.25 : 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.tips_and_updates, color: Color(0xFF6366F1), size: 18),
+                        child: const Icon(Icons.tips_and_updates, color: AppTheme.primaryColor, size: 18),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'Expenses You Can Cut Down',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
               if (suggestions.isEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.black.withOpacity(0.05)),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.check_circle, color: Color(0xFF10B981)),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Great job! No excessive or wasteful spending detected for this period.',
-                              style: TextStyle(fontSize: 13, color: Colors.black87),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final item = suggestions[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                        child: _buildSuggestionCard(context, item),
-                      );
-                    },
-                    childCount: suggestions.length,
-                  ),
-                ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // App Leaderboard: "Which App Mostly Spent Money"
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.apps_rounded, color: Color(0xFF3B82F6), size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Most Spent Apps & Services',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (txnProvider.selectedApp != null)
-                        GestureDetector(
-                          onTap: () => txnProvider.setAppFilter(null),
-                          child: const Text(
-                            'Clear Filter',
-                            style: TextStyle(
-                              color: Color(0xFF6366F1),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 10)),
-
-              if (topApps.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Center(
-                        child: Text('No app spending data available yet.'),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final app = topApps[index];
-                      final isSelected = txnProvider.selectedApp?.toLowerCase() == app.appName.toLowerCase();
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: _buildAppSpendRow(context, app, isSelected, txnProvider),
-                      );
-                    },
-                    childCount: topApps.length,
-                  ),
-                ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // Bank Breakdown Section
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.account_balance_rounded, color: Color(0xFF10B981), size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Spending by Bank Account',
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: Text(
+                        'Great job! No abnormal or high discretionary expenses detected.',
                         style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 10)),
-
-              if (bankBreakdown.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Center(
-                        child: Text('No bank transaction data available.'),
                       ),
                     ),
                   ),
                 )
               else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final entry = bankBreakdown.entries.toList()[index];
-                      final bank = entry.key;
-                      final debit = entry.value['debit'] ?? 0.0;
-                      final credit = entry.value['credit'] ?? 0.0;
-                      final isSelected = txnProvider.selectedBank == bank;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: _buildBankRow(context, bank, debit, credit, isSelected, txnProvider),
-                      );
-                    },
-                    childCount: bankBreakdown.length,
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = suggestions[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _buildSuggestionCard(item, txnProvider, isDark),
+                        );
+                      },
+                      childCount: suggestions.length,
+                    ),
                   ),
                 ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              // App-Wise Spending Leaderboard
+              if (topApps.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(isDark ? 0.25 : 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.storefront_rounded, color: Color(0xFF10B981), size: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Most Spent Apps (Amazon, Flipkart, etc.)',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildAppLeaderboard(topApps, txnProvider, isDark),
+                  ),
+                ),
+              ],
+
+              // Bank Breakdown
+              if (bankBreakdown.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.secondaryColor.withOpacity(isDark ? 0.25 : 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.account_balance, color: AppTheme.secondaryColor, size: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Spending by Bank Account',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildBankList(bankBreakdown, txnProvider, isDark),
+                  ),
+                ),
+              ],
+
+              const SliverToBoxAdapter(child: SizedBox(height: 110)),
             ],
           );
         },
@@ -269,20 +216,23 @@ class AiWasteScreen extends StatelessWidget {
     double wastedTotal,
     double wastedPct,
     TransactionProvider txnProvider,
+    bool isDark,
   ) {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFF5252), Color(0xFFFF7A00)],
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF3B0764), const Color(0xFF0F172A)]
+              : [const Color(0xFFDC2626), const Color(0xFF991B1B)],
         ),
-        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF5252).withOpacity(0.32),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: const Color(0xFFDC2626).withOpacity(isDark ? 0.25 : 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -293,68 +243,68 @@ class AiWasteScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.22),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.white, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      'Waste of Money',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+              Text(
+                'WASTED MONEY (DISCRETIONARY)',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                  color: Colors.white.withOpacity(0.8),
                 ),
               ),
-              GestureDetector(
-                onTap: () {
-                  txnProvider.setOnlyWastedFilter(!txnProvider.onlyWastedSpends);
-                  if (onNavigateTab != null) onNavigateTab!(1);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${wastedPct.toStringAsFixed(0)}% of spends',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    txnProvider.onlyWastedSpends ? 'Showing Wasted' : 'View Items',
-                    style: const TextStyle(
-                      color: Color(0xFFFF5252),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
           Text(
             CurrencyFormatter.format(wastedTotal),
             style: const TextStyle(
-              color: Colors.white,
               fontSize: 34,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
               letterSpacing: -1,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            '${wastedPct.toStringAsFixed(1)}% of your expenses went to non-essentials (Food delivery, impulsive online shopping, entertainment & unused subscriptions).',
+            'Money consumed by food delivery, impulsive e-commerce, entertainment, and non-essential apps.',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.92),
-              fontSize: 13,
+              fontSize: 12.5,
               height: 1.35,
+              color: Colors.white.withOpacity(0.85),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              txnProvider.setOnlyWastedFilter(true);
+              onNavigateTab?.call(2); // Jump to Activity
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFFDC2626),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.filter_alt_rounded, size: 16),
+            label: const Text(
+              'View All Wasted Spends',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -362,27 +312,131 @@ class AiWasteScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSuggestionCard(BuildContext context, AiExpenseSuggestion item) {
-    Color accentColor = const Color(0xFFF59E0B);
-    if (item.severity == 'high') {
-      accentColor = const Color(0xFFEF4444);
-    } else if (item.severity == 'low') {
-      accentColor = const Color(0xFF10B981);
-    }
+  Widget _buildWastedPieCard(Map<String, double> wastedByApp, double totalWaste, bool isDark) {
+    if (wastedByApp.isEmpty || totalWaste <= 0) return const SizedBox.shrink();
+
+    final sorted = wastedByApp.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final colors = [
+      const Color(0xFFEF4444),
+      const Color(0xFFF97316),
+      const Color(0xFFF59E0B),
+      const Color(0xFF8B5CF6),
+      const Color(0xFFEC4899),
+      const Color(0xFF64748B),
+    ];
+
+    final sections = sorted.take(5).toList().asMap().entries.map((e) {
+      final idx = e.key;
+      final entry = e.value;
+      final pct = (entry.value / totalWaste) * 100;
+      return PieChartSectionData(
+        value: entry.value,
+        color: colors[idx % colors.length],
+        title: '${pct.toStringAsFixed(0)}%',
+        radius: 35,
+        titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+      );
+    }).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Where Did Waste Money Go?',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: PieChart(
+                  PieChartData(
+                    sections: sections,
+                    centerSpaceRadius: 28,
+                    sectionsSpace: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: sorted.take(4).toList().asMap().entries.map((e) {
+                    final color = colors[e.key % colors.length];
+                    final item = e.value;
+                    final pct = (item.value / totalWaste) * 100;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item.key,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${pct.toStringAsFixed(0)}% • ${CurrencyFormatter.format(item.value)}',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionCard(
+    AiExpenseSuggestion item,
+    TransactionProvider txnProvider,
+    bool isDark,
+  ) {
+    Color badgeColor = const Color(0xFFEF4444);
+    if (item.severity == 'medium') badgeColor = const Color(0xFFF59E0B);
+    if (item.severity == 'low') badgeColor = const Color(0xFF3B82F6);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.04)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,51 +444,40 @@ class AiWasteScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: accentColor,
-                      shape: BoxShape.circle,
-                    ),
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14.5,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ],
+                ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: badgeColor.withOpacity(isDark ? 0.25 : 0.12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Save ~₹${item.potentialSavings.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    color: Color(0xFF059669),
+                  'Save ~${CurrencyFormatter.format(item.potentialSavings)}',
+                  style: TextStyle(
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    fontSize: 11.5,
+                    color: badgeColor,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             item.description,
             style: TextStyle(
-              color: Colors.grey[700],
-              fontSize: 13,
-              height: 1.35,
+              fontSize: 12.5,
+              height: 1.4,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
           ),
         ],
@@ -442,198 +485,163 @@ class AiWasteScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAppSpendRow(
-    BuildContext context,
-    AppSpendItem app,
-    bool isSelected,
+  Widget _buildAppLeaderboard(
+    List<AppSpendItem> topApps,
     TransactionProvider txnProvider,
+    bool isDark,
   ) {
-    return GestureDetector(
-      onTap: () {
-        if (isSelected) {
-          txnProvider.setAppFilter(null);
-        } else {
-          txnProvider.setAppFilter(app.appName);
-          if (onNavigateTab != null) onNavigateTab!(1);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFEEF2FF) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF6366F1).withOpacity(0.4)
-                : Colors.black.withOpacity(0.04),
-          ),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: _getAppColor(app.appName).withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      app.appName.isNotEmpty ? app.appName[0].toUpperCase() : '?',
-                      style: TextStyle(
-                        color: _getAppColor(app.appName),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        app.appName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                      Text(
-                        '${app.count} transactions • ${app.percentage.toStringAsFixed(1)}% of expenses',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      CurrencyFormatter.format(app.totalSpent),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: Color(0xFFEF4444),
-                      ),
-                    ),
-                    const Text(
-                      'Filter by app →',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        color: Color(0xFF6366F1),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: (app.percentage / 100).clamp(0.0, 1.0),
-                backgroundColor: Colors.grey[100],
-                valueColor: AlwaysStoppedAnimation<Color>(_getAppColor(app.appName)),
-                minHeight: 5,
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
         ),
       ),
-    );
-  }
-
-  Widget _buildBankRow(
-    BuildContext context,
-    String bank,
-    double debit,
-    double credit,
-    bool isSelected,
-    TransactionProvider txnProvider,
-  ) {
-    return GestureDetector(
-      onTap: () {
-        if (isSelected) {
-          txnProvider.setBankFilter(null);
-        } else {
-          txnProvider.setBankFilter(bank);
-          if (onNavigateTab != null) onNavigateTab!(1);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF10B981).withOpacity(0.4)
-                : Colors.black.withOpacity(0.04),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.account_balance, color: Color(0xFF10B981), size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        children: topApps.map((app) {
+          return InkWell(
+            onTap: () {
+              txnProvider.setAppFilter(app.appName);
+              onNavigateTab?.call(2); // Jump to Activity
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
                 children: [
-                  Text(
-                    bank,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withOpacity(isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        app.appName.isNotEmpty ? app.appName[0] : '?',
+                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.primaryColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          app.appName,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          '${app.count} orders • ${app.percentage.toStringAsFixed(1)}% of total spends',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Text(
-                    'Debited: ₹${debit.toStringAsFixed(0)} | Credited: ₹${credit.toStringAsFixed(0)}',
+                    CurrencyFormatter.format(app.totalSpent),
                     style: TextStyle(
-                      fontSize: 11.5,
-                      color: Colors.grey[500],
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: isDark ? const Color(0xFF64748B) : Colors.grey[400],
                   ),
                 ],
               ),
             ),
-            Icon(
-              isSelected ? Icons.check_circle : Icons.chevron_right,
-              color: isSelected ? const Color(0xFF10B981) : Colors.grey[400],
-              size: 20,
-            ),
-          ],
-        ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Color _getAppColor(String name) {
-    final lower = name.toLowerCase();
-    if (lower.contains('swiggy')) return const Color(0xFFFF5200);
-    if (lower.contains('zomato')) return const Color(0xFFE23744);
-    if (lower.contains('amazon')) return const Color(0xFFFF9900);
-    if (lower.contains('flipkart')) return const Color(0xFF2874F0);
-    if (lower.contains('blinkit')) return const Color(0xFFF4C430);
-    if (lower.contains('zepto')) return const Color(0xFF8B5CF6);
-    if (lower.contains('uber')) return const Color(0xFF000000);
-    if (lower.contains('ola')) return const Color(0xFF10B981);
-    if (lower.contains('netflix')) return const Color(0xFFE50914);
-    if (lower.contains('spotify')) return const Color(0xFF1DB954);
-    return const Color(0xFF6366F1);
+  Widget _buildBankList(
+    Map<String, Map<String, double>> bankBreakdown,
+    TransactionProvider txnProvider,
+    bool isDark,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        children: bankBreakdown.entries.map((entry) {
+          final bank = entry.key;
+          final debit = entry.value['debit'] ?? 0.0;
+          final credit = entry.value['credit'] ?? 0.0;
+
+          return InkWell(
+            onTap: () {
+              txnProvider.setBankFilter(bank);
+              onNavigateTab?.call(2); // Jump to Activity
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondaryColor.withOpacity(isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.account_balance, color: AppTheme.secondaryColor, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bank,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          '+${CurrencyFormatter.format(credit)} credit',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '-${CurrencyFormatter.format(debit)}',
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFFEF4444)),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 16, color: isDark ? const Color(0xFF64748B) : Colors.grey[400]),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }

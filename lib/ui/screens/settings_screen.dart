@@ -1,3 +1,5 @@
+import '../../services/backup_service.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/settings_provider.dart';
@@ -17,6 +19,78 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+
+  Future<void> _exportBackup(BuildContext context) async {
+    try {
+      final tp = context.read<TransactionProvider>();
+      final file = await BackupService.instance.exportFullBackup(tp.allOtps);
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Color(0xFF10B981)),
+                SizedBox(width: 8),
+                Text('Backup Exported!'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('All transactions & OTPs successfully backed up to JSON:'),
+                const SizedBox(height: 10),
+                SelectableText(
+                  file.path,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                const Text('Transfer this file to your new device and tap "Restore / Import Full Backup".', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: ' + e.toString()), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _importBackup(BuildContext context) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final path = result.files.single.path!;
+        final stats = await BackupService.instance.importFullBackup(path);
+        if (context.mounted) {
+          final tp = context.read<TransactionProvider>();
+          await tp.loadTransactions();
+          final count = stats['transactions'] ?? 0;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Backup Restored! Imported ' + count.toString() + ' transactions.'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Import failed: ' + e.toString()), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   bool _isSyncing = false;
 
   Future<void> _showSyncOptions() async {
@@ -666,6 +740,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 MaterialPageRoute(builder: (context) => const ImportFileScreen()),
               );
             },
+            isDark: isDark,
+          ),
+          const Divider(height: 16),
+          _buildSettingsTile(
+            icon: Icons.backup_rounded,
+            iconColor: const Color(0xFF10B981),
+            title: 'Export Full Backup (JSON)',
+            subtitle: 'Backup all data to JSON to continue on new device',
+            trailing: const Icon(Icons.download_rounded, color: Color(0xFF10B981)),
+            onTap: () => _exportBackup(context),
+            isDark: isDark,
+          ),
+          const Divider(height: 16),
+          _buildSettingsTile(
+            icon: Icons.settings_backup_restore_rounded,
+            iconColor: const Color(0xFF6366F1),
+            title: 'Restore / Import Full Backup',
+            subtitle: 'Restore JSON backup from previous phone',
+            trailing: const Icon(Icons.upload_rounded, color: Color(0xFF6366F1)),
+            onTap: () => _importBackup(context),
             isDark: isDark,
           ),
         ],
