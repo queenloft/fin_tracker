@@ -41,11 +41,17 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TransactionProvider()..initialize()),
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
       ],
-      child: MaterialApp(
-        title: 'FinTracker',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        home: const DashboardScreen(),
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, child) {
+          return MaterialApp(
+            title: 'FinTracker',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: settings.themeMode, // Automatic system, light, or dark
+            home: const DashboardScreen(),
+          );
+        },
       ),
     );
   }

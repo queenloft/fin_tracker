@@ -4,6 +4,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../data/database/database_helper.dart';
 import '../../services/gemini_service.dart';
+import '../../core/theme/app_theme.dart';
 import 'debug_screen.dart';
 import 'import_sms_screen.dart';
 import 'import_file_screen.dart';
@@ -19,27 +20,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSyncing = false;
 
   Future<void> _showSyncOptions() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Sync SMS with AI'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.history),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.history_rounded, color: AppTheme.primaryColor),
+              ),
               title: const Text('Sync Last 30 Days'),
-              subtitle: const Text('Analyzes recent SMS with AI'),
+              subtitle: const Text('Fast sync: analyzes recent SMS messages with AI'),
               onTap: () {
                 Navigator.pop(context);
                 _syncSMS(limit: 500);
               },
             ),
-            const Divider(),
+            const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.all_inclusive),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.secondaryColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.all_inclusive_rounded, color: AppTheme.secondaryColor),
+              ),
               title: const Text('Sync All Time'),
-              subtitle: const Text('Analyzes all bank SMS messages'),
+              subtitle: const Text('Deep scan: analyzes all bank SMS history'),
               onTap: () {
                 Navigator.pop(context);
                 _syncSMS();
@@ -65,16 +84,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final transactionProvider = context.read<TransactionProvider>();
       await transactionProvider.syncFromSMS(limit: limit);
-      
+
       if (mounted) {
         setState(() {
           _isSyncing = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('SMS sync complete! Found ${transactionProvider.allTransactions.length} total transactions'),
-            backgroundColor: Colors.green,
+            content: Text(
+              'SMS sync complete! Found ${transactionProvider.allTransactions.length} total transactions',
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -84,11 +107,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _isSyncing = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Sync failed: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -97,308 +122,698 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        elevation: 0,
-      ),
-      body: Consumer<SettingsProvider>(
-        builder: (context, provider, child) {
-          return ListView(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            children: [
-              // AI Assistant Section
-              _buildSectionHeader('AI Assistant'),
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
+      backgroundColor: bg,
+      body: SafeArea(
+        bottom: false,
+        child: Consumer<SettingsProvider>(
+          builder: (context, provider, child) {
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Settings & Studio',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.6,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Appearance, AI engine, alerts & data tools',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: Icon(Icons.auto_awesome, color: Colors.blue[700]),
-                      ),
-                      title: const Text('Gemini AI SMS Analyzer'),
-                      subtitle: Text(
-                        provider.hasCustomGeminiKey
-                            ? 'Custom API Key Active'
-                            : 'Camspot Credentials Active',
-                        style: TextStyle(
-                          color: Colors.green[700],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      trailing: Icon(Icons.edit_outlined, color: Colors.grey[600]),
-                      onTap: () => _showAiConfigDialog(context, provider),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Preferences Section
-              _buildSectionHeader('Preferences'),
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      title: const Text('Enable Notifications'),
-                      subtitle: const Text('Get notified for new transactions'),
-                      value: provider.notificationsEnabled,
-                      onChanged: (value) {
-                        provider.setNotificationsEnabled(value);
-                      },
-                      secondary: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.notifications, color: Colors.blue[700]),
-                      ),
-                    ),
-                    const Divider(height: 1, indent: 72),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.green[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.account_balance_wallet, color: Colors.green[700]),
-                      ),
-                      title: const Text('Monthly Budget'),
-                      subtitle: Text(
-                        provider.monthlyBudget != null
-                            ? '₹${provider.monthlyBudget!.toStringAsFixed(0)}'
-                            : 'Not set',
-                        style: TextStyle(
-                          color: provider.monthlyBudget != null ? Colors.green : Colors.grey,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      trailing: Icon(Icons.edit_outlined, color: Colors.grey[600]),
-                      onTap: () => _showBudgetDialog(context, provider),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Data Management Section
-              _buildSectionHeader('Data Management'),
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.purple[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.sync, color: Colors.purple[700]),
-                      ),
-                      title: const Text('Sync SMS'),
-                      subtitle: const Text('Re-sync with AI analysis'),
-                      trailing: _isSyncing 
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(Icons.chevron_right, color: Colors.grey[400]),
-                      onTap: _isSyncing ? null : _showSyncOptions,
-                    ),
-                    const Divider(height: 1, indent: 72),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.teal[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.paste, color: Colors.teal[700]),
-                      ),
-                      title: const Text('Paste & Analyze SMS'),
-                      subtitle: const Text('Test AI analysis on pasted SMS'),
-                      trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ImportSmsScreen(),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            ),
                           ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1, indent: 72),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.upload_file, color: Colors.orange[700]),
-                      ),
-                      title: const Text('Import File'),
-                      subtitle: const Text('Import CSV/XML SMS backup'),
-                      trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ImportFileScreen(),
+                          child: const Icon(
+                            Icons.tune_rounded,
+                            color: AppTheme.primaryColor,
+                            size: 22,
                           ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Developer Tools Section
-              _buildSectionHeader('Developer Tools'),
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.bug_report, color: Colors.amber[700]),
-                  ),
-                  title: const Text('Debug Info'),
-                  subtitle: const Text('View SMS filtering diagnostics'),
-                  trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const DebugScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Danger Zone Section
-              _buildSectionHeader('Danger Zone'),
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 2,
-                color: Colors.red[50],
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.delete_forever, color: Colors.red[700]),
-                  ),
-                  title: Text(
-                    'Clear All Data',
-                    style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text('Delete all transactions permanently'),
-                  trailing: Icon(Icons.chevron_right, color: Colors.red[300]),
-                  onTap: () => _showClearDataDialog(context),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // About Section
-              _buildSectionHeader('About'),
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.indigo[50],
-                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.info_outline, color: Colors.indigo[700]),
-                      ),
-                      title: const Text('Version'),
-                      subtitle: const Text('1.0.0'),
+                      ],
                     ),
-                    const Divider(height: 1, indent: 72),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.teal[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.code, color: Colors.teal[700]),
-                      ),
-                      title: const Text('FinTracker'),
-                      subtitle: const Text('AI-powered SMS expense tracker'),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          );
-        },
+
+                // Appearance & Theme Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                    child: _buildAppearanceCard(provider, isDark),
+                  ),
+                ),
+
+                // AI Intelligence Engine Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                    child: _buildAiAssistantCard(provider, isDark),
+                  ),
+                ),
+
+                // Preferences & Budget Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                    child: _buildPreferencesCard(provider, isDark),
+                  ),
+                ),
+
+                // Data Management Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                    child: _buildDataManagementCard(isDark),
+                  ),
+                ),
+
+                // Developer Tools Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                    child: _buildDevToolsCard(isDark),
+                  ),
+                ),
+
+                // Danger Zone Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                    child: _buildDangerZoneCard(isDark),
+                  ),
+                ),
+
+                // App Info Footer
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Text(
+                            'FinTracker v1.0.0 (Pro Release)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'AI Financial Intelligence • Automatic Theme Support',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Bottom padding for floating island tab bar
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 110),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey[600],
-          letterSpacing: 0.5,
+  Widget _buildAppearanceCard(SettingsProvider provider, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.palette_rounded, color: Colors.amber, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Appearance & Theme',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    'Automatic system match, light, or dark mode',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 3-way Theme Selection Pills
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                _buildThemeOption(
+                  title: 'Auto (System)',
+                  icon: Icons.brightness_auto_rounded,
+                  mode: ThemeMode.system,
+                  currentMode: provider.themeMode,
+                  onSelect: () => provider.setThemeMode(ThemeMode.system),
+                  isDark: isDark,
+                ),
+                _buildThemeOption(
+                  title: 'Light',
+                  icon: Icons.light_mode_rounded,
+                  mode: ThemeMode.light,
+                  currentMode: provider.themeMode,
+                  onSelect: () => provider.setThemeMode(ThemeMode.light),
+                  isDark: isDark,
+                ),
+                _buildThemeOption(
+                  title: 'Dark',
+                  icon: Icons.dark_mode_rounded,
+                  mode: ThemeMode.dark,
+                  currentMode: provider.themeMode,
+                  onSelect: () => provider.setThemeMode(ThemeMode.dark),
+                  isDark: isDark,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeOption({
+    required String title,
+    required IconData icon,
+    required ThemeMode mode,
+    required ThemeMode currentMode,
+    required VoidCallback onSelect,
+    required bool isDark,
+  }) {
+    final isSelected = currentMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onSelect,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark ? const Color(0xFF334155) : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: isSelected
+                    ? AppTheme.primaryColor
+                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAiAssistantCard(SettingsProvider provider, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.auto_awesome_rounded, color: AppTheme.primaryColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Gemini AI Engine',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        provider.hasCustomGeminiKey
+                            ? 'Custom API Key Active'
+                            : 'Camspot Credentials Active',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF10B981),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _showAiConfigDialog(context, provider),
+                icon: const Icon(Icons.tune_rounded, size: 14),
+                label: const Text('Config', style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Extracts transaction amounts, determines credit vs. debit financial intent, flags waste of money, and extracts verification OTPs in real time.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreferencesCard(SettingsProvider provider, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.notifications_active_rounded, color: Colors.blue, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SMS Alerts & Notifications',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    Text(
+                      'Alert when a new transaction SMS is recorded',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: provider.notificationsEnabled,
+                activeColor: AppTheme.primaryColor,
+                onChanged: (val) => provider.setNotificationsEnabled(val),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF10B981), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Monthly Budget Limit',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    Text(
+                      provider.monthlyBudget != null
+                          ? '₹${provider.monthlyBudget!.toStringAsFixed(0)} set'
+                          : 'No budget target set',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: provider.monthlyBudget != null
+                            ? const Color(0xFF10B981)
+                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => _showBudgetDialog(context, provider),
+                child: Text(provider.monthlyBudget != null ? 'Edit' : 'Set'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataManagementCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Data Sync & Management',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildSettingsTile(
+            icon: Icons.sync_rounded,
+            iconColor: const Color(0xFF8B5CF6),
+            title: 'Re-Sync SMS with AI',
+            subtitle: 'Re-categorize and sync bank messages',
+            trailing: _isSyncing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.chevron_right_rounded),
+            onTap: _isSyncing ? null : _showSyncOptions,
+            isDark: isDark,
+          ),
+          const Divider(height: 16),
+          _buildSettingsTile(
+            icon: Icons.paste_rounded,
+            iconColor: Colors.teal,
+            title: 'Paste & Test SMS',
+            subtitle: 'Paste any transaction SMS to test parser',
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ImportSmsScreen()),
+              );
+            },
+            isDark: isDark,
+          ),
+          const Divider(height: 16),
+          _buildSettingsTile(
+            icon: Icons.file_upload_outlined,
+            iconColor: Colors.orange,
+            title: 'Import CSV / XML Backup',
+            subtitle: 'Restore SMS data from file exports',
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ImportFileScreen()),
+              );
+            },
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevToolsCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Diagnostics & Developer Tools',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildSettingsTile(
+            icon: Icons.bug_report_rounded,
+            iconColor: Colors.amber[700]!,
+            title: 'Diagnostics Screen',
+            subtitle: 'SMS stream inspect, DB query stats & parser logs',
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DebugScreen()),
+              );
+            },
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDangerZoneCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444).withOpacity(isDark ? 0.08 : 0.05),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withOpacity(0.25),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Danger Zone',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFEF4444),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildSettingsTile(
+            icon: Icons.delete_forever_rounded,
+            iconColor: const Color(0xFFEF4444),
+            title: 'Clear All Financial Data',
+            subtitle: 'Permanently purge local database transactions & OTPs',
+            trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFEF4444)),
+            onTap: () => _showClearDataDialog(context),
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required Widget trailing,
+    required VoidCallback? onTap,
+    required bool isDark,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            trailing,
+          ],
         ),
       ),
     );
@@ -410,14 +825,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     bool testing = false;
     String? testResult;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
             children: [
-              Icon(Icons.auto_awesome, color: Colors.blue),
+              Icon(Icons.auto_awesome, color: AppTheme.primaryColor),
               SizedBox(width: 8),
               Text('AI Assistant Config'),
             ],
@@ -457,7 +875,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: testResult!.startsWith('Success') ? Colors.green : Colors.red,
+                    color: testResult!.startsWith('Success') ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                   ),
                 ),
               const SizedBox(height: 8),
@@ -528,17 +946,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final controller = TextEditingController(
       text: provider.monthlyBudget?.toStringAsFixed(0) ?? '',
     );
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Set Monthly Budget'),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
             labelText: 'Budget Amount',
-            prefixText: '₹',
+            prefixText: '₹ ',
           ),
         ),
         actions: [
@@ -560,12 +981,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showClearDataDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Clear All Data?'),
         content: const Text(
-          'This will delete all transactions. This action cannot be undone.',
+          'This will permanently delete all transactions and captured OTPs. This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -580,11 +1005,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (context.mounted) {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All data cleared')),
+                  const SnackBar(content: Text('All financial data cleared')),
                 );
               }
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFEF4444)),
             child: const Text('Delete'),
           ),
         ],

@@ -24,6 +24,11 @@ class Ios18FloatingTabBar extends StatelessWidget {
         label: 'Dashboard',
       ),
       _TabItem(
+        icon: Icons.bar_chart_rounded,
+        activeIcon: Icons.bar_chart_rounded,
+        label: 'Analytics',
+      ),
+      _TabItem(
         icon: Icons.receipt_long_outlined,
         activeIcon: Icons.receipt_long_rounded,
         label: 'Activity',
@@ -43,86 +48,90 @@ class Ios18FloatingTabBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.only(left: 20, right: 20, bottom: 12),
+        padding: const EdgeInsets.only(left: 14, right: 14, bottom: 12),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
-              height: 68,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF1C1C1E).withOpacity(0.85)
-                    : Colors.white.withOpacity(0.82),
+                    ? const Color(0xFF1E293B).withOpacity(0.85)
+                    : Colors.white.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
                   color: isDark
                       ? Colors.white.withOpacity(0.12)
-                      : Colors.white.withOpacity(0.75),
+                      : Colors.black.withOpacity(0.08),
                   width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withOpacity(isDark ? 0.45 : 0.08),
                     blurRadius: 28,
                     offset: const Offset(0, 10),
-                    spreadRadius: 2,
+                    spreadRadius: -2,
                   ),
                 ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: List.generate(tabs.length, (index) {
+                  final item = tabs[index];
                   final isSelected = selectedIndex == index;
-                  final tab = tabs[index];
 
                   return Expanded(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {
-                        HapticFeedback.lightImpact();
+                        HapticFeedback.selectionClick();
                         onTabSelected(index);
                       },
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 260),
+                        duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOutCubic,
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppTheme.primaryColor.withOpacity(0.12)
+                              ? (isDark
+                                  ? AppTheme.primaryColor.withOpacity(0.25)
+                                  : AppTheme.primaryColor.withOpacity(0.12))
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(24),
                         ),
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             AnimatedScale(
-                              scale: isSelected ? 1.08 : 1.0,
+                              scale: isSelected ? 1.08 : 0.95,
                               duration: const Duration(milliseconds: 200),
                               child: Icon(
-                                isSelected ? tab.activeIcon : tab.icon,
-                                size: 23,
+                                isSelected ? item.activeIcon : item.icon,
+                                size: 20,
                                 color: isSelected
                                     ? AppTheme.primaryColor
                                     : (isDark
-                                        ? Colors.white54
-                                        : const Color(0xFF8E8E93)),
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF64748B)),
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
-                              tab.label,
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 9.5,
                                 fontWeight: isSelected
-                                    ? FontWeight.w600
+                                    ? FontWeight.w700
                                     : FontWeight.w500,
                                 color: isSelected
                                     ? AppTheme.primaryColor
                                     : (isDark
-                                        ? Colors.white54
+                                        ? const Color(0xFF94A3B8)
                                         : const Color(0xFF8E8E93)),
                                 letterSpacing: -0.2,
                               ),

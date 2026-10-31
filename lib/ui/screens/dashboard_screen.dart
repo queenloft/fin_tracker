@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../widgets/summary_card.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/ios18_floating_tab_bar.dart';
+import 'analytics_screen.dart';
 import 'transactions_screen.dart';
 import 'ai_waste_screen.dart';
 import 'settings_screen.dart';
@@ -94,6 +95,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final screens = [
       _buildDashboardContent(),
+      AnalyticsScreen(
+        onNavigateTab: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+      ),
       const TransactionsScreen(),
       AiWasteScreen(
         onNavigateTab: (index) {
@@ -128,6 +136,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildDashboardContent() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+
     return Consumer2<TransactionProvider, AnalyticsProvider>(
       builder: (context, transactionProvider, analyticsProvider, child) {
         if (transactionProvider.isLoading && transactionProvider.allTransactions.isEmpty) {
@@ -145,7 +156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               // iOS 18 Styled App Bar
               SliverAppBar(
                 floating: true,
-                backgroundColor: const Color(0xFFF6F8FA).withOpacity(0.9),
+                backgroundColor: bg.withOpacity(0.9),
                 elevation: 0,
                 title: Row(
                   children: [
@@ -155,128 +166,236 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         fontWeight: FontWeight.w800,
                         fontSize: 22,
                         letterSpacing: -0.6,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                       ),
                     ),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Color(0xFF6366F1),
-                        borderRadius: BorderRadius.all(Radius.circular(6)),
+                        color: AppTheme.primaryColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(
+                      child: const Text(
                         'AI',
                         style: TextStyle(
-                          color: Colors.white,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
+                          color: AppTheme.primaryColor,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
                   ],
                 ),
                 actions: [
+                  // Year Filter Dropdown Pill
+                  PopupMenuButton<int?>(
+                    initialValue: transactionProvider.selectedYear,
+                    tooltip: 'Filter by Year',
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: transactionProvider.selectedYear != null
+                              ? AppTheme.primaryColor
+                              : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            size: 13,
+                            color: transactionProvider.selectedYear != null
+                                ? AppTheme.primaryColor
+                                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            transactionProvider.selectedYear != null
+                                ? '${transactionProvider.selectedYear}'
+                                : 'All Years',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: transactionProvider.selectedYear != null
+                                  ? AppTheme.primaryColor
+                                  : (isDark ? Colors.white : const Color(0xFF0F172A)),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, size: 16),
+                        ],
+                      ),
+                    ),
+                    onSelected: (year) {
+                      transactionProvider.setYearFilter(year);
+                      _refreshData();
+                    },
+                    itemBuilder: (context) {
+                      return [
+                        const PopupMenuItem<int?>(
+                          value: null,
+                          child: Text('All Years'),
+                        ),
+                        ...transactionProvider.availableYears.map((y) {
+                          return PopupMenuItem<int?>(
+                            value: y,
+                            child: Text('$y'),
+                          );
+                        }),
+                      ];
+                    },
+                  ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: Icon(
-                      Icons.refresh_rounded,
-                      color: transactionProvider.isSyncing
-                          ? const Color(0xFF6366F1)
-                          : Colors.black87,
+                      Icons.sync_rounded,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
                     ),
+                    tooltip: 'Sync SMS',
                     onPressed: () async {
                       HapticFeedback.lightImpact();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Analyzing new SMS with Gemini AI...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
                       await transactionProvider.syncFromSMS(limit: 200);
                       if (mounted) _refreshData();
                     },
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.black87),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AddTransactionScreen(),
-                        ),
-                      ).then((_) => _refreshData());
-                    },
-                  ),
+                  const SizedBox(width: 8),
                 ],
               ),
 
-              // Filter Controls: Year Selector & Period Chips
+              // Date Range Chips
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-                  child: Column(
-                    children: [
-                      _buildYearAndPeriodSelector(transactionProvider),
-                    ],
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _buildFilterChip(
+                          context,
+                          label: 'Today',
+                          isSelected: transactionProvider.dateRangeType == DateRangeType.today,
+                          onTap: () {
+                            transactionProvider.setDateRange(DateRangeType.today);
+                            _refreshData();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          context,
+                          label: 'This Week',
+                          isSelected: transactionProvider.dateRangeType == DateRangeType.week,
+                          onTap: () {
+                            transactionProvider.setDateRange(DateRangeType.week);
+                            _refreshData();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          context,
+                          label: 'This Month',
+                          isSelected: transactionProvider.dateRangeType == DateRangeType.month,
+                          onTap: () {
+                            transactionProvider.setDateRange(DateRangeType.month);
+                            _refreshData();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          context,
+                          label: 'This Year',
+                          isSelected: transactionProvider.dateRangeType == DateRangeType.year,
+                          onTap: () {
+                            transactionProvider.setDateRange(DateRangeType.year);
+                            _refreshData();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          context,
+                          label: 'All Time',
+                          isSelected: transactionProvider.dateRangeType == DateRangeType.all,
+                          onTap: () {
+                            transactionProvider.setDateRange(DateRangeType.all);
+                            _refreshData();
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
 
-              // Modern Hero Card: Balance & Income/Expense Pill
+              // Hero Balance Card (iOS 18 Glass Card)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: _buildHeroBalanceCard(context, analyticsProvider, transactionProvider),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: _buildHeroBalanceCard(context, analyticsProvider, isDark),
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-              // Waste of Money Banner (Direct Call-to-action)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: _buildWasteBanner(context, analyticsProvider),
+              // AI Waste of Money Alert Banner
+              if (analyticsProvider.uselessSpends > 0)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: _buildWasteBanner(context, analyticsProvider, isDark),
+                  ),
                 ),
-              ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-              // Top Spending Apps Leaderboard
+              // Top 3 Apps Quick Strip
               if (analyticsProvider.topApps.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: _buildTopAppsCard(context, analyticsProvider, transactionProvider),
-                  ),
-                ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-              // AI Insights Section
-              if (analyticsProvider.insights.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: _buildInsightsCard(analyticsProvider.insights),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: _buildAppQuickStrip(context, analyticsProvider, transactionProvider, isDark),
                   ),
                 ),
 
               // Recent Transactions Header
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Recent Transactions',
+                      Text(
+                        'Recent Activity',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.4,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
-                      TextButton(
-                        onPressed: () {
+                      GestureDetector(
+                        onTap: () {
                           setState(() {
-                            _selectedIndex = 1;
+                            _selectedIndex = 2; // Jump to activity/transactions
                           });
                         },
-                        child: const Text('View All →'),
+                        child: Text(
+                          'See All',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -284,43 +403,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
               // Recent Transactions List
-              transactionProvider.filteredTransactions.isEmpty
-                  ? SliverToBoxAdapter(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Column(
-                            children: [
-                              Icon(Icons.inbox_outlined, size: 48, color: Colors.grey[400]),
-                              const SizedBox(height: 10),
-                              Text(
-                                'No transactions recorded',
-                                style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                              ),
-                            ],
+              if (transactionProvider.filteredTransactions.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.receipt_long_outlined,
+                            size: 48,
+                            color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
                           ),
-                        ),
-                      ),
-                    )
-                  : SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          if (index >= 6) return null;
-                          final transaction = transactionProvider.filteredTransactions[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                            child: TransactionCard(transaction: transaction),
-                          );
-                        },
-                        childCount: transactionProvider.filteredTransactions.length > 6
-                            ? 6
-                            : transactionProvider.filteredTransactions.length,
+                          const SizedBox(height: 12),
+                          Text(
+                            'No transactions found for this period',
+                            style: TextStyle(
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final tx = transactionProvider.filteredTransactions.take(8).toList()[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TransactionCard(transaction: tx),
+                        );
+                      },
+                      childCount: transactionProvider.filteredTransactions.take(8).length,
+                    ),
+                  ),
+                ),
 
-              // Bottom padding for the floating navigation bar
+              // Floating action bar cushion
               const SliverToBoxAdapter(
-                child: SizedBox(height: 100),
+                child: SizedBox(height: 110),
               ),
             ],
           ),
@@ -329,24 +456,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildFilterChip(
+    BuildContext context, {
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryColor
+              : (isDark ? const Color(0xFF1E293B) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primaryColor
+                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected
+                ? Colors.white
+                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeroBalanceCard(
     BuildContext context,
-    AnalyticsProvider analytics,
-    TransactionProvider txnProvider,
+    AnalyticsProvider provider,
+    bool isDark,
   ) {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF1E1B4B),
+                  const Color(0xFF0F172A),
+                ]
+              : [
+                  const Color(0xFF4F46E5),
+                  const Color(0xFF7C3AED),
+                ],
         ),
-        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF312E81).withOpacity(0.35),
+            color: const Color(0xFF6366F1).withOpacity(isDark ? 0.3 : 0.35),
             blurRadius: 24,
             offset: const Offset(0, 10),
+            spreadRadius: -4,
           ),
         ],
       ),
@@ -358,123 +535,149 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'TOTAL BALANCE',
+                'NET SPENDABLE BALANCE',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.65),
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
+                  color: Colors.white.withOpacity(0.75),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  txnProvider.selectedYear != null
-                      ? 'Year ${txnProvider.selectedYear}'
-                      : _formatRangeLabel(txnProvider.dateRangeType),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield_outlined, size: 12, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'AI Verified',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
-            CurrencyFormatter.format(analytics.balance),
+            CurrencyFormatter.format(provider.balance),
             style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.2,
               color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1,
             ),
           ),
           const SizedBox(height: 20),
           Row(
             children: [
-              // Income Pill
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(18),
+                    color: Colors.white.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.2),
+                          color: const Color(0xFF10B981).withOpacity(0.3),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.arrow_downward, color: Color(0xFF34D399), size: 14),
+                        child: const Icon(
+                          Icons.arrow_downward_rounded,
+                          size: 14,
+                          color: Color(0xFF6EE7B7),
+                        ),
                       ),
                       const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Income',
-                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
-                          ),
-                          Text(
-                            CurrencyFormatter.formatCompact(analytics.totalIncome),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Income',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withOpacity(0.75),
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                            Text(
+                              CurrencyFormatter.format(provider.totalIncome),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-
-              // Expense Pill
+              const SizedBox(width: 10),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(18),
+                    color: Colors.white.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444).withOpacity(0.2),
+                          color: const Color(0xFFEF4444).withOpacity(0.3),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.arrow_upward, color: Color(0xFFF87171), size: 14),
+                        child: const Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 14,
+                          color: Color(0xFFFCA5A5),
+                        ),
                       ),
                       const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Spent',
-                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
-                          ),
-                          Text(
-                            CurrencyFormatter.formatCompact(analytics.totalExpense),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Spent',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withOpacity(0.75),
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ],
+                            Text(
+                              CurrencyFormatter.format(provider.totalExpense),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -487,31 +690,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildWasteBanner(BuildContext context, AnalyticsProvider analytics) {
+  Widget _buildWasteBanner(
+    BuildContext context,
+    AnalyticsProvider provider,
+    bool isDark,
+  ) {
     return GestureDetector(
       onTap: () {
         setState(() {
-          _selectedIndex = 2; // Jump to AI & Waste tab
+          _selectedIndex = 3; // Navigate to AI & Waste tab
         });
       },
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF1F2),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFFECDD3)),
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFFECACA)),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(14),
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEE2E2),
+                shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 24),
+              child: const Icon(
+                Icons.delete_sweep_rounded,
+                color: Color(0xFFDC2626),
+                size: 20,
+              ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,298 +730,122 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     children: [
                       const Text(
-                        'Waste of Money: ',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        'Waste of Money Detected',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF991B1B),
+                        ),
                       ),
-                      Text(
-                        CurrencyFormatter.format(analytics.uselessSpends),
-                        style: const TextStyle(
-                          color: Color(0xFFEF4444),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${provider.uselessSpendPercentage.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${analytics.uselessSpendPercentage.toStringAsFixed(0)}% of spent went to non-essentials. Tap for AI tips →',
-                    style: TextStyle(color: Colors.grey[700], fontSize: 11.5),
+                    '₹${CurrencyFormatter.format(provider.uselessSpends)} in food delivery, shopping & impulses',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFFB91C1C),
+                    ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFFEF4444), size: 20),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFFDC2626),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTopAppsCard(
+  Widget _buildAppQuickStrip(
     BuildContext context,
-    AnalyticsProvider analytics,
-    TransactionProvider txnProvider,
+    AnalyticsProvider analyticsProvider,
+    TransactionProvider transactionProvider,
+    bool isDark,
   ) {
-    final top3 = analytics.topApps.take(3).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withOpacity(0.04)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.apps_rounded, color: Color(0xFF3B82F6), size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Top Spent Apps',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedIndex = 2; // Jump to AI & Waste tab
-                  });
-                },
-                child: const Text(
-                  'See All Apps →',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6366F1),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...top3.map((app) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Text(
-                    app.appName,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  const Spacer(),
-                  Text(
-                    CurrencyFormatter.format(app.totalSpent),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: Color(0xFFEF4444),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildYearAndPeriodSelector(TransactionProvider provider) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: [
-          // Year Selection Dropdown / Pill
-          PopupMenuButton<int?>(
-            onSelected: (year) {
-              provider.setYearFilter(year);
-              _refreshData();
-            },
-            itemBuilder: (context) {
-              return [
-                const PopupMenuItem<int?>(
-                  value: null,
-                  child: Text('All Years'),
-                ),
-                ...provider.availableYears.map((y) {
-                  return PopupMenuItem<int?>(
-                    value: y,
-                    child: Text('Year $y'),
-                  );
-                }),
-              ];
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: provider.selectedYear != null
-                    ? const Color(0xFF6366F1)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: provider.selectedYear != null
-                      ? const Color(0xFF6366F1)
-                      : Colors.black.withOpacity(0.08),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    size: 13,
-                    color: provider.selectedYear != null ? Colors.white : Colors.black87,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    provider.selectedYear != null
-                        ? '${provider.selectedYear}'
-                        : 'Year: All',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: provider.selectedYear != null ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    size: 16,
-                    color: provider.selectedYear != null ? Colors.white : Colors.black54,
-                  ),
-                ],
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'High Spending Apps',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
             ),
           ),
-
-          const SizedBox(width: 8),
-
-          // Period Chips
-          _buildDateRangeChip('Today', DateRangeType.today, provider),
-          const SizedBox(width: 6),
-          _buildDateRangeChip('Week', DateRangeType.week, provider),
-          const SizedBox(width: 6),
-          _buildDateRangeChip('Month', DateRangeType.month, provider),
-          const SizedBox(width: 6),
-          _buildDateRangeChip('6M', DateRangeType.sixMonths, provider),
-          const SizedBox(width: 6),
-          _buildDateRangeChip('1Y', DateRangeType.year, provider),
-          const SizedBox(width: 6),
-          _buildDateRangeChip('All', DateRangeType.all, provider),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateRangeChip(
-    String label,
-    DateRangeType type,
-    TransactionProvider provider,
-  ) {
-    final isSelected = provider.dateRangeType == type && provider.selectedYear == null;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        provider.setYearFilter(null);
-        provider.setDateRange(type);
-        _refreshData();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E1B4B) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF1E1B4B) : Colors.black.withOpacity(0.06),
-          ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInsightsCard(List<String> insights) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withOpacity(0.04)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.lightbulb_rounded, color: Color(0xFFF59E0B), size: 18),
-              SizedBox(width: 8),
-              Text(
-                'AI Financial Insights',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...insights.take(3).map((insight) => Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  insight,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[700],
-                    height: 1.35,
+        Row(
+          children: analyticsProvider.topApps.take(3).map((item) {
+            return Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  transactionProvider.setAppFilter(item.appName);
+                  setState(() {
+                    _selectedIndex = 2; // Jump to activity filtered
+                  });
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.appName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        CurrencyFormatter.format(item.totalAmount),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              )),
-        ],
-      ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
-  }
-
-  String _formatRangeLabel(DateRangeType type) {
-    switch (type) {
-      case DateRangeType.today:
-        return 'Today';
-      case DateRangeType.week:
-        return 'This Week';
-      case DateRangeType.month:
-        return 'This Month';
-      case DateRangeType.sixMonths:
-        return 'Last 6 Months';
-      case DateRangeType.year:
-        return 'Last 1 Year';
-      case DateRangeType.all:
-        return 'All Time';
-      case DateRangeType.custom:
-        return 'Custom';
-    }
   }
 }

@@ -415,6 +415,7 @@ class AnalyticsService {
 class AppSpendItem {
   final String appName;
   final double totalSpent;
+  double get totalAmount => totalSpent;
   final int count;
   final double percentage;
 
