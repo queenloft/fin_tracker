@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import '../data/models/transaction_model.dart';
 import '../data/repositories/transaction_repository.dart';
 import '../services/sms_service.dart';
@@ -17,6 +17,7 @@ class TransactionProvider with ChangeNotifier {
   List<TransactionModel> _allTransactions = [];
   List<TransactionModel> _filteredTransactions = [];
   bool _isLoading = false;
+  bool _isSyncing = false; // separate flag for SMS sync
   String? _error;
   // Filters
   DateRangeType _dateRangeType = DateRangeType.today;
@@ -30,6 +31,7 @@ class TransactionProvider with ChangeNotifier {
   List<TransactionModel> get allTransactions => _allTransactions;
   List<TransactionModel> get filteredTransactions => _filteredTransactions;
   bool get isLoading => _isLoading;
+  bool get isSyncing => _isSyncing;
   String? get error => _error;
   DateRangeType get dateRangeType => _dateRangeType;
   String? get selectedCategory => _selectedCategory;
@@ -73,7 +75,8 @@ class TransactionProvider with ChangeNotifier {
 
   // Read existing SMS and parse transactions
   Future<void> syncFromSMS({int? limit}) async {
-    _isLoading = true;
+    if (_isSyncing) return; // prevent concurrent syncs
+    _isSyncing = true;
     _error = null;
     notifyListeners();
 
@@ -101,7 +104,8 @@ class TransactionProvider with ChangeNotifier {
 
         // 1. Try AI Assistant parsing first
         try {
-          final aiResult = await _smsService.parseSmsWithAi(sms['body']);
+          final aiResult = await _smsService.parseSmsWithAi(sms['body'])
+              .timeout(const Duration(seconds: 5), onTimeout: () => null);
           if (aiResult != null && aiResult['isTransaction'] != false) {
             transaction = _parserService.createTransactionFromAiResult(
               aiResult: aiResult,
@@ -147,11 +151,13 @@ class TransactionProvider with ChangeNotifier {
 
       // Reload transactions
       await loadTransactions();
+      _isSyncing = false;
+      notifyListeners();
       print('=== SMS Sync Complete ===');
     } catch (e) {
       print('ERROR in syncFromSMS: $e');
       _error = e.toString();
-      _isLoading = false;
+      _isSyncing = false;
       notifyListeners();
     }
   }
@@ -167,7 +173,8 @@ class TransactionProvider with ChangeNotifier {
 
           // Try AI parsing first
           try {
-            final aiResult = await _smsService.parseSmsWithAi(sms['body']);
+            final aiResult = await _smsService.parseSmsWithAi(sms['body'])
+              .timeout(const Duration(seconds: 5), onTimeout: () => null);
             if (aiResult != null && aiResult['isTransaction'] != false) {
               transaction = _parserService.createTransactionFromAiResult(
                 aiResult: aiResult,

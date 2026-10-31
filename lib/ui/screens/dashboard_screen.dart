@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../providers/analytics_provider.dart';
@@ -153,14 +153,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDashboardContent() {
     return Consumer2<TransactionProvider, AnalyticsProvider>(
       builder: (context, transactionProvider, analyticsProvider, child) {
-        if (transactionProvider.isLoading) {
+        // Show full-screen loader only on initial load (no data yet)
+        if (transactionProvider.isLoading && transactionProvider.allTransactions.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
 
         return RefreshIndicator(
           onRefresh: () async {
-            await transactionProvider.syncFromSMS();
-            _refreshData();
+            await transactionProvider.syncFromSMS(limit: 200);
+            if (mounted) _refreshData();
           },
           child: CustomScrollView(
             slivers: [
@@ -172,8 +173,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   IconButton(
                     icon: const Icon(Icons.refresh),
                     onPressed: () async {
-                      await transactionProvider.syncFromSMS();
-                      _refreshData();
+                      await transactionProvider.syncFromSMS(limit: 200);
+                      if (mounted) _refreshData();
                     },
                   ),
                 ],

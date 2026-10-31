@@ -1,4 +1,4 @@
-import '../core/constants/app_constants.dart';
+﻿import '../core/constants/app_constants.dart';
 import '../data/models/transaction_model.dart';
 
 class CategorizationService {
@@ -46,6 +46,62 @@ class CategorizationService {
     }
 
     // Default category
+    return AppConstants.categoryOther;
+  }
+
+  // Normalize category from AI or external input to standard AppConstants categories
+  String normalizeCategory(String rawCategory) {
+    final clean = rawCategory.trim().toLowerCase();
+    
+    // Exact match check
+    for (final cat in AppConstants.allCategories) {
+      if (cat.toLowerCase() == clean) return cat;
+    }
+
+    // Synonym & substring mapping
+    if (clean.contains('food') || clean.contains('dining') || clean.contains('restaurant') || clean.contains('cafe') || clean.contains('swiggy') || clean.contains('zomato')) {
+      return AppConstants.categoryFood;
+    }
+    if (clean.contains('grocer') || clean.contains('supermarket') || clean.contains('mart') || clean.contains('blinkit') || clean.contains('zepto') || clean.contains('instamart')) {
+      return AppConstants.categoryGroceries;
+    }
+    if (clean.contains('transport') || clean.contains('travel') || clean.contains('cab') || clean.contains('ride') || clean.contains('fuel') || clean.contains('petrol') || clean.contains('uber') || clean.contains('ola') || clean.contains('toll')) {
+      return AppConstants.categoryTransport;
+    }
+    if (clean.contains('shop') || clean.contains('cloth') || clean.contains('store') || clean.contains('amazon') || clean.contains('flipkart') || clean.contains('myntra')) {
+      return AppConstants.categoryShopping;
+    }
+    if (clean.contains('bill') || clean.contains('utilit') || clean.contains('recharge') || clean.contains('electricity') || clean.contains('water') || clean.contains('gas') || clean.contains('broadband')) {
+      return AppConstants.categoryBills;
+    }
+    if (clean.contains('emi') || clean.contains('loan') || clean.contains('credit card bill') || clean.contains('installment')) {
+      return AppConstants.categoryEMI;
+    }
+    if (clean.contains('rent')) {
+      return AppConstants.categoryRent;
+    }
+    if (clean.contains('salary') || clean.contains('wage') || clean.contains('payroll')) {
+      return AppConstants.categorySalary;
+    }
+    if (clean.contains('entertain') || clean.contains('movie') || clean.contains('cinema') || clean.contains('pvr') || clean.contains('theatre') || clean.contains('gaming')) {
+      return AppConstants.categoryEntertainment;
+    }
+    if (clean.contains('subscript') || clean.contains('streaming') || clean.contains('netflix') || clean.contains('spotify') || clean.contains('prime') || clean.contains('hotstar')) {
+      return AppConstants.categorySubscriptions;
+    }
+    if (clean.contains('health') || clean.contains('medic') || clean.contains('pharma') || clean.contains('hospital') || clean.contains('doctor') || clean.contains('clinic')) {
+      return AppConstants.categoryHealth;
+    }
+    if (clean.contains('educat') || clean.contains('school') || clean.contains('college') || clean.contains('course') || clean.contains('tuition') || clean.contains('fee')) {
+      return AppConstants.categoryEducation;
+    }
+    if (clean.contains('invest') || clean.contains('mutual fund') || clean.contains('stock') || clean.contains('sip') || clean.contains('zerodha') || clean.contains('groww')) {
+      return AppConstants.categoryInvestment;
+    }
+    if (clean.contains('refund') || clean.contains('cashback') || clean.contains('reversal')) {
+      return AppConstants.categoryRefund;
+    }
+
     return AppConstants.categoryOther;
   }
 

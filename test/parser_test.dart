@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:fin_tracker/services/parser_service.dart';
 import 'package:fin_tracker/core/constants/app_constants.dart';
 
@@ -140,6 +140,46 @@ void main() {
       expect(txn.isCredit, false);
       expect(txn.category, 'Subscriptions');
       expect(txn.description, 'Netflix');
+    });
+    test('createTransactionFromAiResult normalizes synonymous AI categories', () {
+      final aiResult = {
+        'isTransaction': true,
+        'amount': 450.0,
+        'type': 'debit',
+        'category': 'Food & Dining',
+        'merchant': 'Swiggy',
+      };
+
+      final txn = parser.createTransactionFromAiResult(
+        aiResult: aiResult,
+        smsBody: 'Rs 450 paid to Swiggy',
+        sender: 'HDFC',
+        receivedDate: DateTime.now(),
+      );
+
+      expect(txn, isNotNull);
+      expect(txn!.category, AppConstants.categoryFood);
+      expect(txn.amount, 450.0);
+    });
+
+    test('createTransactionFromAiResult handles travel/cab into Transport category', () {
+      final aiResult = {
+        'isTransaction': true,
+        'amount': 220.0,
+        'type': 'debit',
+        'category': 'Cab Ride',
+        'merchant': 'Uber',
+      };
+
+      final txn = parser.createTransactionFromAiResult(
+        aiResult: aiResult,
+        smsBody: 'Rs 220 paid for Uber trip',
+        sender: 'SBI',
+        receivedDate: DateTime.now(),
+      );
+
+      expect(txn, isNotNull);
+      expect(txn!.category, AppConstants.categoryTransport);
     });
   });
 }

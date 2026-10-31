@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:another_telephony/telephony.dart';
 import '../core/constants/sms_patterns.dart';

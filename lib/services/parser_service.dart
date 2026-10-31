@@ -1,4 +1,4 @@
-import 'package:uuid/uuid.dart';
+﻿import 'package:uuid/uuid.dart';
 import '../data/models/transaction_model.dart';
 import '../core/constants/app_constants.dart';
 import '../core/constants/sms_patterns.dart';

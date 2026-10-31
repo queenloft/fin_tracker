@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../core/constants/app_constants.dart';
 
